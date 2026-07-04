@@ -1,0 +1,4 @@
+interface:
+  display_name: "2DWebGame AutoResearch v2"
+  short_description: "Benchmark-guided Web 2D game pipeline"
+  default_prompt: "Use $2dwebgame-autoresearch-v2 to design, build, benchmark, and iteratively improve a Phaser/Vite Web 2D side-scrolling game from a game idea or reference images."

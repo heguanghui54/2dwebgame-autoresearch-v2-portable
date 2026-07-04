@@ -1,0 +1,39 @@
+{
+  "package_name": "2dwebgame-autoresearch-v2-portable",
+  "skill_name": "2dwebgame-autoresearch-v2",
+  "version": "0.2.0-portable.20260704",
+  "created_at": "2026-07-04",
+  "default_install_dir": "~/.codex/skills/2dwebgame-autoresearch-v2",
+  "portable_goal": "Install and run the AI-Scientist-style Web 2D game generation skill on another Codex machine with graceful dependency degradation.",
+  "required_commands": [
+    "bash",
+    "git",
+    "node",
+    "npm",
+    "python3"
+  ],
+  "recommended_commands": [
+    "ffmpeg",
+    "ffprobe",
+    "rg",
+    "gh"
+  ],
+  "optional_codex_skills_or_plugins": [
+    "generate2dmap",
+    "generate2dsprite",
+    "game-studio:phaser-2d-game",
+    "game-studio:game-playtest",
+    "volcengine:volcengine",
+    "chrome:control-chrome"
+  ],
+  "optional_public_benchmarks": [
+    "T2I-CompBench",
+    "GenEval",
+    "DoveNet/iHarmony",
+    "VBench",
+    "GameCraft",
+    "VideoGameQA"
+  ],
+  "video_generation_policy": "Volcengine Seedance and other video generation services are optional. If the user wants to open/login/authorize Volcengine, use it and record task id plus provenance. If no video generator is available, skip video generation and continue with a static background.",
+  "fallback_policy": "Missing external generators or public benchmark runners must be reported as disabled or SKIPPED_NO_SCORE; do not fabricate official scores, task ids, videos, or provenance."
+}
