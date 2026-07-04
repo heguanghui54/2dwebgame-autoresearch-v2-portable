@@ -14,6 +14,8 @@
 - 支持真实 Seedance 动态背景流程；没有真实 task id 和下载文件时不会伪造动态，直接退回静态背景。
 - 支持本地 OpenGame-style BH/VU/IA 检查，以及 progressive full-scale layer benchmarking。
 - 先自动配置 public benchmark runner，再进入正式自动迭代。公共 benchmark 缺失时记录 `SKIPPED_NO_SCORE`，不伪造官方分数；如果全部 skipped，不能宣称 final high-quality success。
+- Runner READY 后还必须准备输入包并实际执行。`ready_public_runner_count > 0` 不是评估完成，`PENDING_NOT_EXECUTED` 不能作为高质量最终交付证据。
+- Critic、审核报告、public benchmark report 和用户反馈中的可执行建议必须转成 SABG 搜索节点继续迭代，不能只写报告停止。
 
 ## 安装
 
@@ -144,6 +146,36 @@ Benchmark 输入协议：
 
 如果 `benchmark_bootstrap_report.json` 中 `ready_public_runner_count` 为 0，pipeline 可以继续做设计或 prototype，但不能宣称完成了 public benchmark 自动迭代，也不能作为 final high-quality game 交付。
 
+Bootstrap 之后必须准备输入包：
+
+```bash
+python ~/.codex/skills/2dwebgame-autoresearch-v2/scripts/prepare_public_benchmark_inputs.py \
+  --project <your-game-project> \
+  --prompt "<short scene prompt>" \
+  --runtime-screenshot <runtime_start.png> \
+  --layer-preview <full_scene.png> \
+  --runtime-video <camera_sweep.mp4> \
+  --dovenet-composite <runtime_full.png> \
+  --dovenet-mask <mask.png>
+```
+
+它会生成：
+
+```text
+<your-game-project>/benchmark/results/public_benchmarks/inputs/t2i/input_manifest.json
+<your-game-project>/benchmark/results/public_benchmarks/inputs/vbench/video_manifest.json
+<your-game-project>/benchmark/results/public_benchmarks/inputs/dovenet/input_manifest.json
+<your-game-project>/benchmark/results/public_benchmarks/inputs/public_benchmark_input_pack_report.json
+```
+
+执行规则：
+
+- T2I prompt 文件名只使用短 `prompt_slug`，完整 prompt 写在 JSON，避免长 prompt 文件名导致 runner 失败。
+- VBench 必须使用真实 MP4/WebM；没有 Seedance 视频时用 runtime camera sweep。
+- DoveNet/iHarmony 必须有 composite + mask；没有 same-camera target 时只能 diagnostic/advisory，不能写严格官方分数。
+- READY runner + 输入存在时必须执行并保存 `public_benchmark_execution_report.json`；执行失败要记录命令、退出码、stdout/stderr tail。
+- 自定义游戏截图/视频默认 `leaderboard_comparable: false`，除非使用官方数据集、prompt suite、协议和入口。
+
 ## 真实资产 Gate
 
 正式节点进入 Phaser runtime 前，必须为每个最终可见资产记录：
@@ -231,4 +263,7 @@ git push -u origin main
 - `skill/2dwebgame-autoresearch-v2/SKILL.md` 的 frontmatter 名称与目录一致。
 - 包内没有本机绝对路径。
 - 缺少外部生成或公共 benchmark 时，流程必须降级为记录 `SKIPPED_NO_SCORE`，不能伪造分数或动态视频。
+- Public runner READY 后必须有输入包和执行结果，或明确阻断原因；不能停在 `READY_ONLY` / `PENDING_NOT_EXECUTED`。
+- 审核建议必须进入搜索/迭代队列，交付报告要说明每条建议已实施、回滚或延期。
+- 旧 SVG/contact sheet/manifest/debug/prototype 资产不能留在 selected asset 目录中误导评审。
 - `visual_asset_source_gate` 能阻止程序化占位美术、黑图、纯色块、噪声墙、SVG 几何图和低精度放大图进入最终交付。

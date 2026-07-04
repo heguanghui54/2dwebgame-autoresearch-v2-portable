@@ -182,6 +182,19 @@ Define the inputs each runner will receive:
 - DoveNet/iHarmony: composite screenshot, valid foreground/playfield/midground mask, and optional same-camera target if a strict score is claimed.
 - Local OpenGame-style: Playwright screenshots, route trace, controls trace, console/request logs.
 
+Also define:
+
+- where the input package will be written: `benchmark/results/public_benchmarks/inputs/`.
+- short `prompt_slug` for public runners, max 64 ASCII chars; the full prompt stays inside JSON, never in the filename.
+- which READY public runners must be executed before final handoff.
+- which outputs prove execution: `public_benchmark_execution_report.json` and per-runner `result.json`.
+- which cases are allowed to remain skipped: missing runner, missing user authorization, missing valid same-camera DoveNet target, or execution failure with captured stdout/stderr.
+
+Hard rule:
+
+- Public benchmark bootstrap is not enough. A design cannot claim benchmark-driven iteration unless it plans both input packing and runner execution.
+- Custom game screenshots/videos are not leaderboard-comparable unless the official benchmark dataset, prompt suite, protocol, and runner entrypoint all match exactly.
+
 ### Camera And Parallax
 
 Define:
@@ -267,6 +280,8 @@ Criteria:
 - real visual asset source feasibility.
 - public benchmark infrastructure feasibility.
 - benchmark input protocol feasibility.
+- public benchmark execution feasibility.
+- review-action iteration feasibility.
 
 Iterate up to 3 design rounds.
 
@@ -278,6 +293,8 @@ Pass only when:
 - all benchmark gates are testable,
 - final visual assets have a concrete generate2dmap/generate2dsprite/image-generation or approved-asset path.
 - public benchmark bootstrap and input plans are concrete enough to run before final selection.
+- public benchmark execution plan says exactly which READY runners will be run and how failures will become search nodes.
+- critic recommendations from this round have been applied or added to the next design revision queue.
 
 If the critic fails the design after 3 rounds, stop implementation and report the blocker.
 
@@ -288,6 +305,10 @@ Additional critic hard-fails:
 - The plan relies on benchmarks that only check non-empty screenshots and do not check whether real generated assets are visible.
 - The plan has no public benchmark bootstrap or leaves all public runners skipped while still claiming automatic benchmark iteration.
 - The plan has no benchmark input protocol for video, screenshots, masks, prompts, and route traces.
+- The plan configures public benchmark runners but never schedules actual execution.
+- The plan would leave `PENDING_NOT_EXECUTED` or `READY_ONLY` public benchmark status in final success.
+- The plan uses long natural-language prompts as runner filenames instead of short slugs.
+- The plan treats critic/review recommendations as a report appendix instead of converting them into implementation/search nodes.
 - The plan would allow a playable prototype to be called a final high-quality game without returning to real asset generation.
 
 ## Design Decision Log

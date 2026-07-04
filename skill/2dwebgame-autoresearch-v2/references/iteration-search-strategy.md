@@ -78,12 +78,16 @@ Node labels:
 - `visual_asset_source_gate`
 - `benchmark_infrastructure`
 - `public_benchmark_bootstrap`
+- `public_benchmark_input_pack`
+- `public_benchmark_execution`
 - `phaser_integration`
 - `camera_tuning`
 - `collision_tuning`
 - `gameplay_route`
 - `benchmark_rule`
 - `user_feedback_patch`
+- `review_action_node`
+- `stale_asset_cleanup`
 
 Bug labels:
 
@@ -201,6 +205,42 @@ Examples from the first successful game:
 - "脚悬空" -> collision/contact-plane tuning, not art regeneration.
 - "角色不突出" -> bounded hero color/style branch.
 
+### Stage 5.5: Review-Action Search
+
+Design critic、visual critic、runtime report、public benchmark report、人工审核报告都不是终点。只要报告中有可执行建议，就必须进入 review-action search。
+
+流程：
+
+```text
+review recommendation
+-> classify as failure_signature or improvement_signal
+-> create candidate review_action_node
+-> patch only the target subsystem
+-> run targeted benchmark and screenshot/video probe
+-> accept, rollback, or defer with reason
+```
+
+分类规则：
+
+- 设计/玩法建议：回到 `design_revision` 或 `gameplay_route`。
+- 美术资产建议：回到 `background_asset`、`midground_asset`、`hero_sprite` 或 `visual_asset_source_gate`。
+- 公共 benchmark 建议：回到 `public_benchmark_input_pack`、`public_benchmark_execution` 或 `benchmark_infrastructure`。
+- 旧资产/假证据建议：回到 `stale_asset_cleanup`，再重跑 asset source gate。
+- 数值/镜头建议：回到 Stage 4 的局部坐标搜索。
+
+停止条件：
+
+- 所有 high-priority 建议都已经被节点测试并通过。
+- 建议被明确延期，且原因是用户未授权、外部付费/登录阻断、预算耗尽或会破坏更高优先级 hard gate。
+- 不能因为“已经写了审核报告”而停止。
+
+记录要求：
+
+```text
+benchmark/results/iteration/review_action_queue.json
+benchmark/results/iteration/review_action_nodes/*.json
+```
+
 ### Stage 6: Regression Lock
 
 After each accepted node, lock the passing evidence:
@@ -224,6 +264,7 @@ Hard gates:
 - build health pass,
 - playable start-to-win route,
 - at least one public benchmark runner READY for final high-quality selection,
+- at least one READY public runner has been executed, or the final status is explicitly prototype/advisory because execution is impossible,
 - visual asset source gate pass,
 - no procedural placeholder art in final selected visual stack,
 - no fake Seedance,
@@ -269,6 +310,10 @@ Special rule:
 - If a benchmark passes a node that uses placeholder art, black previews, broken layers, or procedural final art, create a `benchmark_rule` child first. The next accepted node must prove the strengthened benchmark now fails the bad example and only passes real generated/approved assets.
 - If all public benchmark runners are `SKIPPED_NO_SCORE`, create a `benchmark_infrastructure` child first. Do not keep expanding art, camera, or gameplay nodes as if benchmark evidence were complete.
 - If a runner is READY but the expected video/screenshot/mask/prompt input is missing, create a `benchmark_input_protocol` child that generates the missing input artifacts, then rerun the benchmark.
+- If a runner is READY and input exists but no execution result exists, create a `public_benchmark_execution` child. `PENDING_NOT_EXECUTED` is not an acceptable final state for a high-quality node.
+- If a public benchmark wrapper fails because the prompt was used as a file name, create a `public_benchmark_input_pack` child and replace raw prompt filenames with short stable slugs while preserving the full prompt in JSON.
+- If a critic or report gives actionable recommendations, create `review_action_node` children before final handoff. Report-only completion is a failed iteration.
+- If obsolete SVG/contact sheets/old manifests/debug assets remain in selected directories, create `stale_asset_cleanup` first, then rerun source/provenance gates.
 
 ## Stopping Rules
 
@@ -284,7 +329,8 @@ Stop the whole run only when:
 - game can be played from start to victory,
 - hard gates pass,
 - `.game_scientist/benchmark_bootstrap_report.json` proves at least one public runner is READY,
+- public benchmark input pack exists for READY runners and execution results exist or a precise blocker is recorded,
 - final visible assets have generate2dmap/generate2dsprite/image-generation or approved-asset provenance,
 - user-visible screenshots/video confirm assets and motion,
-- user feedback checklist is resolved or explicitly deferred,
+- user feedback and review-action checklist is resolved, rolled back with evidence, or explicitly deferred,
 - final handoff includes URL, assets, manifest, benchmark, screenshots, and provenance.

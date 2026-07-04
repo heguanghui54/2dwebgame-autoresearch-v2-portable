@@ -94,6 +94,88 @@ scripts/run_remote_dovenet.py
   - Intent Alignment。
   - Playwright 自动通关。
 
+## 输入包与执行协议
+
+`bootstrap` 只回答“runner 是否可用”，不回答“这个游戏是否被评估过”。因此每次 high-quality run 必须再执行两个节点：
+
+```text
+public_benchmark_input_pack
+public_benchmark_execution
+```
+
+标准输入包位置：
+
+```text
+<project_root>/benchmark/results/public_benchmarks/inputs/
+  t2i/input_manifest.json
+  vbench/video_manifest.json
+  dovenet/input_manifest.json
+  public_benchmark_input_pack_report.json
+```
+
+可用 helper：
+
+```bash
+python <skill_dir>/scripts/prepare_public_benchmark_inputs.py \
+  --project <project_root> \
+  --prompt "<short scene prompt>" \
+  --runtime-screenshot <runtime_start.png> \
+  --layer-preview <full_scene.png> \
+  --runtime-video <camera_sweep.mp4> \
+  --dovenet-composite <runtime_full.png> \
+  --dovenet-mask <mask.png>
+```
+
+T2I-CompBench 输入：
+
+- 至少一个真实 runtime screenshot 或 full-scale layer preview。
+- 完整 prompt/reference contract 写在 JSON 字段中。
+- `prompt_slug` 必须短、稳定、ASCII，最长 64 字符。不要把完整 prompt 拼进文件名；长 prompt 作为文件名会触发 `OSError: File name too long` 或 wrapper 失败。
+
+VBench 输入：
+
+- 必须有真实 MP4/WebM。
+- 如果没有 Seedance 视频，就录制 runtime camera sweep 或角色动作预览短视频。
+- 没有视频时写 `benchmark_input_protocol_missing`，不能写 VBench 分数。
+
+DoveNet/iHarmony 输入：
+
+- 必须有 composite image 和有效 mask。
+- 没有 same-camera target 时，只能输出 diagnostic/advisory 或 `SKIPPED_NO_SCORE`，不能写严格官方数值。
+
+执行结果位置：
+
+```text
+<project_root>/benchmark/results/public_benchmarks/<runner_name>/result.json
+<project_root>/benchmark/results/public_benchmarks/public_benchmark_execution_report.json
+```
+
+每条结果必须包含：
+
+```json
+{
+  "benchmark_source": "VBench | T2I-CompBench | DoveNet/iHarmony",
+  "implementation_mode": "official_runner | faithful_metric_port | strict_protocol_replication | wrapper_execution | skipped",
+  "runner_status": "READY | EXECUTED | FAILED | SKIPPED_NO_SCORE",
+  "official_score": null,
+  "leaderboard_comparable": false,
+  "score": null,
+  "input_manifest": "...",
+  "command": "...",
+  "diagnostics": [],
+  "skip_reason": "",
+  "stdout_tail": "",
+  "stderr_tail": ""
+}
+```
+
+规则：
+
+- READY runner + 输入存在时，final handoff 前必须实际执行。
+- `PENDING_NOT_EXECUTED` 只能存在于中间报告，不能作为 final high-quality success 的证据。
+- 执行失败必须生成 `public_benchmark_execution`、`benchmark_input_protocol` 或 `benchmark_infrastructure` 子节点修复。
+- 自定义游戏截图/视频即使通过官方代码或远程 GPU 跑了，也默认 `leaderboard_comparable: false`。只有官方数据集、官方 prompt suite、官方协议和官方入口完全一致，才可写 `leaderboard_comparable: true`。
+
 ## 失败处理
 
 - 如果某个 public runner 缺失，记录 `SKIPPED_NO_SCORE` 和具体 skip reason。
@@ -101,16 +183,20 @@ scripts/run_remote_dovenet.py
 - 如果 public runner 可用但输入缺失，这是 `benchmark_input_protocol_missing`，回到截图/视频/mask 生成节点。
 - 如果 public runner 失败，记录 stdout/stderr tail，并创建 `benchmark_rule` 或 `benchmark_infrastructure` 节点修复。
 - 只有在至少一个 public runner READY 且本地 BH/VU/IA hard gates 通过时，节点才可进入最终候选。
+- 如果至少一个 public runner READY，但没有任何 runner 执行成功或明确失败记录，这是 `public_benchmark_ready_not_executed`，不能进入最终候选。
+- 如果 wrapper 因长 prompt 文件名失败，这是 `public_benchmark_prompt_filename_fail`；修复为短 slug 文件名并重跑，不要修改游戏内容。
 
 ## Portable 说明
 
 Portable 包不能自带大型模型权重和所有第三方依赖，但必须自带：
 
 - bootstrap 脚本。
+- 输入包 helper 脚本。
 - 配置 schema。
 - 输入协议。
 - fallback/skip 规则。
 - all-skipped 阻断规则。
+- READY 后必须执行或记录失败的规则。
 
 其他用户安装后，若没有本地 benchmark repo，可以：
 

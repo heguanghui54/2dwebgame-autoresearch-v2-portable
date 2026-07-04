@@ -6,6 +6,7 @@
 
 - 先设计，后生成。任何地图、角色、Seedance、Phaser 代码之前，必须先通过 `game_design_plan` 和 critic gate。
 - 先配置 public benchmark，再进入正式自动迭代。每个项目都必须生成 `.game_scientist/benchmarks.json` 和 `.game_scientist/benchmark_bootstrap_report.json`。
+- 先执行 public benchmark，再宣称 public benchmark 参与迭代。Runner READY 只是环境可用，不是评估完成；必须准备输入包、运行 READY runner、记录结果或失败。
 - 先生成真实图像资产，再做正式 runtime。外部或内置 `generate2dmap` / `generate2dsprite` 是高质量地图、平台、角色、敌人、Boss、FX 的默认入口。
 - 先验证，再宣称成功。构建、截图、玩法、视觉、用户反馈都要有证据。
 - 不追求一次命中。像 AI Scientist v2 一样，把候选设计和每轮修改当作节点，记录失败原因，选择最强节点继续。
@@ -70,6 +71,40 @@ python <skill_dir>/scripts/bootstrap_public_benchmarks.py \
 - 可以继续生成设计、资产或 prototype，但最终交付必须写明 public benchmark 阻断。
 - 下一轮搜索优先扩展 `benchmark_infrastructure` 节点，配置 VBench / T2I-CompBench / DoveNet runner 或 wrapper。
 
+## 1.6 Public Benchmark 输入包与执行节点
+
+当至少一个 public runner READY 后，必须在最终候选进入 handoff 前准备输入包：
+
+```bash
+python <skill_dir>/scripts/prepare_public_benchmark_inputs.py \
+  --project <project_root> \
+  --prompt "<short scene prompt>" \
+  --runtime-screenshot <runtime_start.png> \
+  --layer-preview <full_scene.png> \
+  --runtime-video <camera_sweep.mp4> \
+  --dovenet-composite <runtime_full.png> \
+  --dovenet-mask <mask.png>
+```
+
+标准输出：
+
+```text
+benchmark/results/public_benchmarks/inputs/t2i/input_manifest.json
+benchmark/results/public_benchmarks/inputs/vbench/video_manifest.json
+benchmark/results/public_benchmarks/inputs/dovenet/input_manifest.json
+benchmark/results/public_benchmarks/inputs/public_benchmark_input_pack_report.json
+benchmark/results/public_benchmarks/public_benchmark_execution_report.json
+```
+
+执行规则：
+
+- T2I prompt 文件名只能用短 slug，完整 prompt 写 JSON，防止长 prompt 文件名失败。
+- VBench 必须有真实 MP4/WebM。没有 Seedance 视频时录制 runtime camera sweep；没有视频不能写 VBench 分数。
+- DoveNet/iHarmony 必须有 composite + mask；没有 same-camera target 时只做 diagnostic/advisory，不写严格官方分数。
+- READY runner + 输入存在时必须执行；`PENDING_NOT_EXECUTED` 不能进入 final high-quality handoff。
+- 自定义游戏截图/视频默认 `leaderboard_comparable: false`，除非完全使用官方数据集、官方 prompt suite、官方协议和官方入口。
+- 失败要记录命令、退出码、stdout/stderr tail，并作为 `public_benchmark_execution` 或 `benchmark_input_protocol` 节点继续迭代。
+
 ## 2. 参考图分析节点
 
 输出：
@@ -106,6 +141,7 @@ python <skill_dir>/scripts/bootstrap_public_benchmarks.py \
 - 资产清单。
 - 真实图像资产来源计划：哪些走 `generate2dmap`，哪些走 `generate2dsprite`，哪些走 Seedance，哪些使用用户高精度资产或 approved existing asset。
 - benchmark 清单。
+- public benchmark 输入包与执行计划：哪些截图、视频、mask、prompt 会给哪个 runner，哪些 runner 必须实际执行。
 - 风险。
 
 输出：
@@ -137,6 +173,7 @@ python <skill_dir>/scripts/bootstrap_public_benchmarks.py \
 - 单项 >= 7。
 - 无 hard-fail。
 - benchmark 都可执行。
+- public benchmark 不能停在 bootstrap；输入包和执行计划可执行。
 
 输出：
 
@@ -153,6 +190,8 @@ hard-fail 示例：
 - Seedance 要求无法追溯 provenance。
 - 角色动作没有脚底基准和动作连续性规则。
 - 用户反馈无法转成截图或 benchmark。
+- critic 或审核建议无法转成搜索节点。
+- public runner READY 但没有输入包或执行计划。
 - 背景、平台、中景、角色、敌人、Boss 或 FX 计划使用程序化图形作为最终高精度资产。
 - 没有真实图像生成或 approved asset provenance，却宣称能达到高质量成品。
 
@@ -389,6 +428,14 @@ SKIPPED_NO_SCORE
 
 但如果所有 public runners 都是 `SKIPPED_NO_SCORE`，这是 benchmark infrastructure failure，不是正常通过。正式节点必须阻断，并回到 `Public Benchmark Bootstrap` 节点配置 runner 或 wrapper。
 
+如果有 public runner READY：
+
+- 先生成 `public_benchmark_input_pack_report.json`。
+- 再执行 READY runner 或 wrapper。
+- 每个结果都写 `implementation_mode`、`runner_status`、`official_score`、`leaderboard_comparable`、`score`、`skip_reason`、`diagnostics`。
+- 不能用 `READY`、`PENDING_NOT_EXECUTED`、`input_missing` 替代真实执行结果。
+- 如果执行失败，先修输入包或 runner，不要把 benchmark 基础设施失败误当成画面失败。
+
 ## 10. 迭代搜索节点
 
 使用 `references/iteration-search-strategy.md` 的 `SABG` 策略：阶段化自适应最佳优先图搜索 + 局部贪心修复。
@@ -399,12 +446,15 @@ SKIPPED_NO_SCORE
 - 相机比例、背景裁切、视频速度、跳跃高度、碰撞线这类连续或低成本参数，用局部贪心/坐标搜索。
 - 用户反馈先分类，再决定回到哪个节点。
 - 每个被接受节点都保存截图、benchmark、manifest 和 provenance，防止后续回退。
+- 每条审核建议都必须进入 `review_action_queue`，变成候选节点后测试、接受、回滚或延期。
 
 按失败节点回退：
 
 - 设计失败：重写设计，不生成资产。
 - 可见资产来源失败：回到 `generate2dmap` / `generate2dsprite` / image generation / approved asset 节点，不能继续调 runtime 参数来掩盖。
 - public benchmark 全部 skipped：回到 `Public Benchmark Bootstrap` 节点，不能把 all-skipped 当作 final success。
+- public runner READY 但没执行：回到 `public_benchmark_input_pack` 和 `public_benchmark_execution`。
+- public runner 因长 prompt 文件名失败：改短 slug 文件名，完整 prompt 留在 manifest，再重跑。
 - benchmark 放过占位图：先修 benchmark 规则，再重跑，不要继续声明成功。
 - 背景失败：重写背景 prompt 或重做 Seedance。
 - 中景失败：重做抠像/颜色/位置，不改玩法。
@@ -412,6 +462,8 @@ SKIPPED_NO_SCORE
 - 相机失败：调 depth ratio、easing、端点映射。
 - 玩法失败：调碰撞、能力门、敌人、路线。
 - 用户反馈失败：把反馈转成新 benchmark 或截图检查。
+- 审核建议未处理：转成 SABG 节点，不要只写报告。
+- 旧 prototype/SVG/contact sheet/manifest 误导评审：清理到 `discarded/` 或从 selected manifest 移除，再重跑 source gate。
 
 默认预算：
 
@@ -443,4 +495,7 @@ SKIPPED_NO_SCORE
 - 背景/平台/中景等地图资产有 `generate2dmap` 或等价图像生成 provenance。
 - 主角/敌人/Boss/FX 有 `generate2dsprite` 或等价 sprite 生成 provenance。
 - `.game_scientist/benchmark_bootstrap_report.json` 证明至少一个 public runner READY；否则只能标记 prototype/advisory。
+- READY public runner 已经实际执行，或报告给出明确阻断原因并把本轮标为 prototype/advisory。
 - 用户反馈的问题已经修复或转成可复测 benchmark。
+- critic/review 建议已经实施、回滚或明确延期。
+- 旧的程序化/SVG/debug/prototype 资产没有留在 selected asset 目录中制造假证据。
