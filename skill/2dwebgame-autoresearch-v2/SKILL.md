@@ -35,6 +35,8 @@ v2 在 v1 基础上新增或强化：
 - `references/iteration-search-strategy.md`
 - `references/pipeline-cn-v1-base.md`
 - `references/successful-game-lessons.md`
+- `references/public-benchmark-bootstrap.md`
+- `references/embedded-asset-generation.md`
 
 执行完整任务时优先读本 `SKILL.md`。需要更细的模板或流程时，再读取上述 v2 本地参考文件，不要读取 v1 路径。
 
@@ -49,6 +51,8 @@ v2 在 v1 基础上新增或强化：
 - 每个节点必须记录 parent、改动原因、prompt/patch、benchmark、截图/视频、用户反馈、回归项、pass/fail 和下一步。
 - 只从当前最佳通过节点继续；如果新节点修复一个指标但破坏 hard gate 或用户意图，必须回滚。
 - v2 额外加入 progressive full-scale layer benchmarking、strict/advisory policy、public benchmark `SKIPPED_NO_SCORE` 规则和 benchmark-feedback iteration 控制器。
+- v2 必须先配置 public benchmark runner，再进入正式自动迭代。每个项目必须生成 `.game_scientist/benchmarks.json` 和 `.game_scientist/benchmark_bootstrap_report.json`；如果所有 public runners 都是 `SKIPPED_NO_SCORE`，这是 `benchmark_infrastructure_missing`，不能当作最终成功。
+- v2 必须自带地图和角色生成核心流程。外部 `generate2dmap` / `generate2dsprite` 可用时优先调用；不可用时必须使用本 skill 内置的 `references/embedded/` 契约和 `scripts/embedded_*` 脚本继续执行，不能降级成程序化最终美术。
 - 高质量游戏不能使用程序化占位图形作为最终美术。Canvas/SVG/HTML/CSS/几何图形/脚本绘制只允许做 debug、layout guide、碰撞可视化或临时 playable baseline；最终背景、平台、中景、角色、敌人、Boss、FX 必须来自 `generate2dmap`、`generate2dsprite`、内置 `image_gen`、用户提供的高精度资产或明确批准的现有生产资产。
 - 如果本轮没有真实图像生成能力或没有可用高精度资产，可以交付 prototype，但不得宣称“高精度”“一线效果”“制作成功”。benchmark 必须 hard-fail `visual_asset_source_gate`。
 - 如果 benchmark 让程序化占位资产、黑图、噪声墙、纯色块、SVG 几何图、debug rectangle 或 runtime shape-drawn 角色通过，先修 benchmark，再继续做游戏。
@@ -69,8 +73,10 @@ v2 在 v1 基础上新增或强化：
 
 优先使用：
 
-- `generate2dmap`：side-scroll 地图、runtime objects、分层契约。高质量背景、场景层、平台/门/机关/拾取物视觉资产默认必须走它或等价图像生成流程，不要用脚本画最终地图。
-- `generate2dsprite`：角色动作、透明帧、动作一致性 QC。高质量主角、敌人、Boss、FX 默认必须走它或等价图像生成流程，不要用代码绘制最终角色。
+- 外部 `generate2dmap` 或内置 `references/embedded/generate2dmap-SKILL.md`：side-scroll 地图、runtime objects、分层契约。高质量背景、场景层、平台/门/机关/拾取物视觉资产默认必须走它或等价图像生成流程，不要用脚本画最终地图。
+- 外部 `generate2dsprite` 或内置 `references/embedded/generate2dsprite-SKILL.md`：角色动作、透明帧、动作一致性 QC。高质量主角、敌人、Boss、FX 默认必须走它或等价图像生成流程，不要用代码绘制最终角色。
+- `scripts/bootstrap_public_benchmarks.py`：为每个项目自动发现并写入 public benchmark runner 配置。
+- `scripts/embedded_compose_layered_preview.py`、`scripts/embedded_extract_prop_pack.py`、`scripts/embedded_generate2dsprite.py`、`scripts/embedded_make_sprite_layout_guide.py`：外部生成 skill 缺失时的内置后处理与 QC 工具。
 - `game-studio:phaser-2d-game`：Phaser/Vite 场景、输入、HUD、相机。
 - `game-studio:game-playtest`：可玩性与通关测试。
 - `volcengine:volcengine` / `chrome:control-chrome`：用户授权后调用火山引擎 Seedance。
@@ -78,22 +84,88 @@ v2 在 v1 基础上新增或强化：
 - `ffmpeg` / `ffprobe`：视频尺寸、时长、首尾帧、GIF/WebM/MP4 转换。
 - 可选公共 benchmark：VBench、GenEval、T2I-CompBench、DoveNet/iHarmony、GameCraft、VideoGameQA。
 
-公共 benchmark 不可用时必须写 `SKIPPED_NO_SCORE`，不能用弱代理分数冒充官方或 leaderboard 可比结果。
+公共 benchmark 不可用时必须写 `SKIPPED_NO_SCORE`，不能用弱代理分数冒充官方或 leaderboard 可比结果。但 pipeline 不能默认停在 all-skipped 状态：必须先运行 benchmark bootstrap 自动发现/配置 runner；若全部 skipped，记录为 `benchmark_infrastructure_missing`，修配置或保持 prototype/advisory，不能 final handoff 为高质量自动迭代成果。
+
+## Public Benchmark Bootstrap
+
+每个新项目在 `repo_preflight` 后必须运行：
+
+```bash
+python <skill_dir>/scripts/bootstrap_public_benchmarks.py \
+  --project <project_root> \
+  --workspace-root <workspace_root>
+```
+
+正式 final selection 前必须运行 strict 复查：
+
+```bash
+python <skill_dir>/scripts/bootstrap_public_benchmarks.py \
+  --project <project_root> \
+  --workspace-root <workspace_root> \
+  --strict
+```
+
+必须生成：
+
+```text
+<project_root>/.game_scientist/benchmarks.json
+<project_root>/.game_scientist/benchmark_bootstrap_report.json
+```
+
+bootstrap 自动发现：
+
+- `GameScientistBenchmarks/VBench`
+- `GameScientistBenchmarks/T2I-CompBench`
+- `GameScientistBenchmarks/Image-Harmonization-Dataset-iHarmony4/DoveNet`
+- `GameScientistBenchmarks/checkpoints/dovenet/latest_net_G.pth`
+- `scripts/run_remote_vbench.py`
+- `scripts/run_remote_t2i_clipscore.py`
+- `scripts/run_remote_dovenet.py`
+
+也接受环境变量：`GAMESCIENTIST_BENCHMARK_ROOT`、`VBENCH_REPO`、`VBENCH_COMMAND`、`T2I_COMPBENCH_REPO`、`T2I_COMPBENCH_COMMAND`、`DOVENET_REPO`、`DOVENET_CHECKPOINT`、`DOVENET_COMMAND`。
+
+输入协议必须在项目 benchmark 脚本中准备：
+
+- VBench：Seedance 背景视频、runtime camera sweep、角色动作预览短视频。
+- T2I-CompBench：runtime screenshot、full-scale layer preview、设计 prompt/reference contract。
+- DoveNet/iHarmony：composite runtime image、playfield/midground/foreground mask、可选 same-camera target。
+
+若 `benchmark_bootstrap_report.json.ready_public_runner_count == 0`，这是 `benchmark_infrastructure_missing`，不能进入 final high-quality selection。可以继续设计、生成资产或 prototype，但交付必须标为 advisory/prototype，并把配置 public runners 作为下一步阻断项。
+
+## Embedded Map And Sprite Subfunctions
+
+本 skill 不能依赖其他机器安装了外部 `generate2dmap` / `generate2dsprite`。因此 v2 已内化这两个 skill 的完整副本：
+
+```text
+references/embedded/generate2dmap-SKILL.md
+references/embedded/generate2dsprite-SKILL.md
+references/embedded/generate2dmap-*.md
+references/embedded/generate2dsprite-*.md
+scripts/embedded_*.py
+```
+
+执行规则：
+
+- 外部 peer skill 可用时优先调用。
+- 外部 peer skill 不可用时，必须读取内置 `generate2dmap-SKILL.md` / `generate2dsprite-SKILL.md` 全文，并按其 references/scripts 的内置映射执行。
+- 这些内置文件是权威子功能，不是缩水版摘要。
+- 缺少外部 skill 不是使用程序化最终美术的理由。
 
 ## 总流程
 
 每次 run 按节点执行：
 
 1. `repo_preflight`：检查项目、脚本、服务、已有 manifest 和 benchmark。
-2. `reference_analysis`：复制参考图，分析风格、色彩、空间、动态线索、禁止项。
-3. `idea_design_search`：生成或补全设计方案，critic 最多 3 轮。
-4. `asset_generation`：用 `generate2dmap` / `generate2dsprite` / image generation 生成背景、中景、平台、角色、FX、Seedance 动态背景。
-5. `visual_asset_source_gate`：检查每个可见最终资产的来源、prompt、原图、QC、非占位证据；程序化占位美术必须阻断。
-6. `progressive_layer_composition_benchmark`：资产进入 Phaser 前，做全尺寸逐层合成与评测。
-7. `phaser_runtime_integration`：manifest 驱动加载、输入、碰撞、相机、HUD、debug API。
-8. `runtime_benchmark`：构建、服务、截图、视频、通关、动作、相机、层级、用户反馈。
-9. `benchmark_feedback_iteration`：按失败项只修改对应节点，复测，接受或回滚。
-10. `handoff`：交付 URL、图片/视频/JSON 证据、得分、剩余风险。
+2. `public_benchmark_bootstrap`：运行 `scripts/bootstrap_public_benchmarks.py`，生成项目级 `.game_scientist/benchmarks.json` 和 doctor 报告；all-skipped 必须阻断 final selection。
+3. `reference_analysis`：复制参考图，分析风格、色彩、空间、动态线索、禁止项。
+4. `idea_design_search`：生成或补全设计方案，critic 最多 3 轮。
+5. `asset_generation`：优先用外部 `generate2dmap` / `generate2dsprite`；外部缺失时用内置 embedded 地图/角色流程；通过 image generation 生成背景、中景、平台、角色、FX、Seedance 动态背景。
+6. `visual_asset_source_gate`：检查每个可见最终资产的来源、prompt、原图、QC、非占位证据；程序化占位美术必须阻断。
+7. `progressive_layer_composition_benchmark`：资产进入 Phaser 前，做全尺寸逐层合成与评测。
+8. `phaser_runtime_integration`：manifest 驱动加载、输入、碰撞、相机、HUD、debug API。
+9. `runtime_benchmark`：构建、服务、截图、视频、通关、动作、相机、层级、用户反馈。
+10. `benchmark_feedback_iteration`：按失败项只修改对应节点，复测，接受或回滚。
+11. `handoff`：交付 URL、图片/视频/JSON 证据、得分、剩余风险。
 
 ## 设计 Gate
 

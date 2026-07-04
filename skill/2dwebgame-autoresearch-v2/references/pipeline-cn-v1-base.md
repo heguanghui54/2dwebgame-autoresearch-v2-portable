@@ -5,7 +5,8 @@
 ## 0. 总原则
 
 - 先设计，后生成。任何地图、角色、Seedance、Phaser 代码之前，必须先通过 `game_design_plan` 和 critic gate。
-- 先生成真实图像资产，再做正式 runtime。`generate2dmap` / `generate2dsprite` 或等价图像生成流程是高质量地图、平台、角色、敌人、Boss、FX 的默认入口。
+- 先配置 public benchmark，再进入正式自动迭代。每个项目都必须生成 `.game_scientist/benchmarks.json` 和 `.game_scientist/benchmark_bootstrap_report.json`。
+- 先生成真实图像资产，再做正式 runtime。外部或内置 `generate2dmap` / `generate2dsprite` 是高质量地图、平台、角色、敌人、Boss、FX 的默认入口。
 - 先验证，再宣称成功。构建、截图、玩法、视觉、用户反馈都要有证据。
 - 不追求一次命中。像 AI Scientist v2 一样，把候选设计和每轮修改当作节点，记录失败原因，选择最强节点继续。
 - 不伪造外部资产。Seedance 没有真实调用或没有真实下载结果，就不能把本地合成物冒充动态背景。
@@ -35,6 +36,39 @@ public/assets/web-pipeline/<run-slug>/
 ```
 
 必须复制参考图，不直接依赖临时剪贴板路径。
+
+## 1.5 Public Benchmark Bootstrap 节点
+
+每次 run 在参考图分析和设计之前，必须先配置 benchmark runner：
+
+```bash
+python <skill_dir>/scripts/bootstrap_public_benchmarks.py \
+  --project <project_root> \
+  --workspace-root <workspace_root>
+```
+
+正式 final selection 前必须 strict 复查：
+
+```bash
+python <skill_dir>/scripts/bootstrap_public_benchmarks.py \
+  --project <project_root> \
+  --workspace-root <workspace_root> \
+  --strict
+```
+
+必须输出：
+
+```text
+<project_root>/.game_scientist/benchmarks.json
+<project_root>/.game_scientist/benchmark_bootstrap_report.json
+```
+
+`ready_public_runner_count == 0` 时：
+
+- 记录 `benchmark_infrastructure_missing`。
+- 不能把本轮标为 final high-quality success。
+- 可以继续生成设计、资产或 prototype，但最终交付必须写明 public benchmark 阻断。
+- 下一轮搜索优先扩展 `benchmark_infrastructure` 节点，配置 VBench / T2I-CompBench / DoveNet runner 或 wrapper。
 
 ## 2. 参考图分析节点
 
@@ -174,7 +208,13 @@ benchmark 必须检查：
 
 不要把背景拆成多层模糊图。背景是一张完整远景；中景是在背景和 gameplay 之间增加的具体物体，不是第二张满屏背景。
 
-地图资产必须优先调用 `generate2dmap side_scroll_mode` 或等价 image-generation workflow。不能用脚本画几何背景、噪声背景、SVG 平台、矩形门、圆形拾取物来冒充最终美术。
+地图资产必须优先调用外部 `generate2dmap side_scroll_mode`。如果外部 skill 不存在，必须读取并执行 v2 内置副本：
+
+```text
+references/embedded/generate2dmap-SKILL.md
+```
+
+该内置副本是完整 `generate2dmap` 子功能，不是简化契约。不能用脚本画几何背景、噪声背景、SVG 平台、矩形门、圆形拾取物来冒充最终美术。
 
 中景规则：
 
@@ -231,7 +271,13 @@ ffmpeg -i generated/background_dynamic.mp4 -vf "select='eq(n,0)+eq(n,75)+eq(n,14
 
 ## 7. 角色与动作节点
 
-优先用 `generate2dsprite` 或等价流程。至少动作：
+优先用外部 `generate2dsprite`。如果外部 skill 不存在，必须读取并执行 v2 内置副本：
+
+```text
+references/embedded/generate2dsprite-SKILL.md
+```
+
+该内置副本是完整 `generate2dsprite` 子功能，不是简化契约。至少动作：
 
 ```text
 idle, walk, run, jump, dash, light_attack, heavy_attack, parry, skill_cast, hurt, death
@@ -341,6 +387,8 @@ SKIPPED_NO_SCORE
 
 不得伪造官方分数。
 
+但如果所有 public runners 都是 `SKIPPED_NO_SCORE`，这是 benchmark infrastructure failure，不是正常通过。正式节点必须阻断，并回到 `Public Benchmark Bootstrap` 节点配置 runner 或 wrapper。
+
 ## 10. 迭代搜索节点
 
 使用 `references/iteration-search-strategy.md` 的 `SABG` 策略：阶段化自适应最佳优先图搜索 + 局部贪心修复。
@@ -356,6 +404,7 @@ SKIPPED_NO_SCORE
 
 - 设计失败：重写设计，不生成资产。
 - 可见资产来源失败：回到 `generate2dmap` / `generate2dsprite` / image generation / approved asset 节点，不能继续调 runtime 参数来掩盖。
+- public benchmark 全部 skipped：回到 `Public Benchmark Bootstrap` 节点，不能把 all-skipped 当作 final success。
 - benchmark 放过占位图：先修 benchmark 规则，再重跑，不要继续声明成功。
 - 背景失败：重写背景 prompt 或重做 Seedance。
 - 中景失败：重做抠像/颜色/位置，不改玩法。
@@ -393,4 +442,5 @@ SKIPPED_NO_SCORE
 - `asset_manifest.json` 证明 final visible assets 不来自 `procedural_debug`。
 - 背景/平台/中景等地图资产有 `generate2dmap` 或等价图像生成 provenance。
 - 主角/敌人/Boss/FX 有 `generate2dsprite` 或等价 sprite 生成 provenance。
+- `.game_scientist/benchmark_bootstrap_report.json` 证明至少一个 public runner READY；否则只能标记 prototype/advisory。
 - 用户反馈的问题已经修复或转成可复测 benchmark。

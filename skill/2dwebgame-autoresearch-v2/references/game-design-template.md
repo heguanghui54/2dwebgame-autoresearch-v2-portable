@@ -42,6 +42,8 @@ Each candidate must include:
 - `midground_plan`
 - `character_action_plan`
 - `visual_asset_source_plan`
+- `public_benchmark_bootstrap_plan`
+- `public_benchmark_input_plan`
 - `asset_manifest_plan`
 - `benchmark_plan`
 - `risk_register`
@@ -148,6 +150,38 @@ Hard rule:
 - Low-resolution user references are style/input references only. They cannot be enlarged and shipped as final high-precision assets.
 - Procedural Canvas/SVG/HTML/CSS/Phaser Graphics/geometry art cannot be accepted as final high-quality background, platform, character, enemy, boss, or FX art.
 
+If external `generate2dmap` / `generate2dsprite` skills are not available, the plan must use v2's embedded subfunctions:
+
+- `references/embedded/generate2dmap-SKILL.md`
+- `references/embedded/generate2dsprite-SKILL.md`
+
+Do not invent a new simplified generation contract.
+
+### Public Benchmark Bootstrap Plan
+
+Before implementation, declare how public benchmarks will be configured:
+
+- project-local `.game_scientist/benchmarks.json`
+- `.game_scientist/benchmark_bootstrap_report.json`
+- expected `ready_public_runner_count`
+- VBench runner or wrapper
+- T2I-CompBench runner or wrapper
+- DoveNet/iHarmony runner or wrapper and checkpoint
+- skipped public runners and exact skip reasons
+
+Hard rule:
+
+- If all public runners are `SKIPPED_NO_SCORE`, the run may continue only as prototype/advisory. It cannot be called final high-quality automatic benchmark iteration.
+
+### Public Benchmark Input Plan
+
+Define the inputs each runner will receive:
+
+- VBench: dynamic background video, runtime camera sweep, or character-action preview clip.
+- T2I-CompBench: runtime screenshots, full-scale layer previews, and the design/reference prompt contract.
+- DoveNet/iHarmony: composite screenshot, valid foreground/playfield/midground mask, and optional same-camera target if a strict score is claimed.
+- Local OpenGame-style: Playwright screenshots, route trace, controls trace, console/request logs.
+
 ### Camera And Parallax
 
 Define:
@@ -202,6 +236,8 @@ Define hard gates before implementation:
 - playfield fit.
 - parallax depth and endpoint mapping.
 - dynamic background truth/provenance.
+- public benchmark bootstrap ready.
+- public benchmark input artifacts ready.
 - grounded foot contact.
 - full control and victory route.
 - restart after victory.
@@ -229,6 +265,8 @@ Criteria:
 - benchmarkability,
 - production risk.
 - real visual asset source feasibility.
+- public benchmark infrastructure feasibility.
+- benchmark input protocol feasibility.
 
 Iterate up to 3 design rounds.
 
@@ -239,6 +277,7 @@ Pass only when:
 - no hard-fail,
 - all benchmark gates are testable,
 - final visual assets have a concrete generate2dmap/generate2dsprite/image-generation or approved-asset path.
+- public benchmark bootstrap and input plans are concrete enough to run before final selection.
 
 If the critic fails the design after 3 rounds, stop implementation and report the blocker.
 
@@ -247,6 +286,8 @@ Additional critic hard-fails:
 - The plan uses code-drawn shapes, SVG, Canvas, CSS, Phaser Graphics, procedural noise, or debug rectangles as final high-quality art.
 - The plan lacks a source/provenance/QC path for background, midground, platform art, hero sprite, enemy/boss sprite, or FX.
 - The plan relies on benchmarks that only check non-empty screenshots and do not check whether real generated assets are visible.
+- The plan has no public benchmark bootstrap or leaves all public runners skipped while still claiming automatic benchmark iteration.
+- The plan has no benchmark input protocol for video, screenshots, masks, prompts, and route traces.
 - The plan would allow a playable prototype to be called a final high-quality game without returning to real asset generation.
 
 ## Design Decision Log

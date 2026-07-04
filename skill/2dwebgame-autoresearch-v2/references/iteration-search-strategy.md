@@ -76,6 +76,8 @@ Node labels:
 - `midground_asset`
 - `hero_sprite`
 - `visual_asset_source_gate`
+- `benchmark_infrastructure`
+- `public_benchmark_bootstrap`
 - `phaser_integration`
 - `camera_tuning`
 - `collision_tuning`
@@ -91,6 +93,8 @@ Bug labels:
 - `provenance_buggy`
 - `placeholder_art_buggy`
 - `benchmark_false_positive_buggy`
+- `benchmark_infrastructure_buggy`
+- `benchmark_input_protocol_buggy`
 - `regression_buggy`
 - `user_intent_buggy`
 
@@ -119,6 +123,8 @@ Branch only high-impact assets:
 - platform material language.
 
 Production-quality branches must call `generate2dmap`, `generate2dsprite`, image generation, user high-resolution assets, or approved existing production assets. Code-drawn geometry, SVG/Canvas/CSS art, procedural noise, and Phaser Graphics shapes can only be prototype/debug branches.
+
+If external `generate2dmap` / `generate2dsprite` skills are missing, use the embedded subfunctions copied into `references/embedded/` and `scripts/embedded_*`. Missing peer skills are not a reason to create procedural final art.
 
 Default branch budget:
 
@@ -201,6 +207,7 @@ After each accepted node, lock the passing evidence:
 
 - screenshot set,
 - benchmark JSON,
+- public benchmark bootstrap report,
 - selected manifest,
 - asset provenance,
 - visual asset source report,
@@ -216,6 +223,7 @@ Hard gates:
 
 - build health pass,
 - playable start-to-win route,
+- at least one public benchmark runner READY for final high-quality selection,
 - visual asset source gate pass,
 - no procedural placeholder art in final selected visual stack,
 - no fake Seedance,
@@ -259,6 +267,8 @@ Do not expand a node when:
 Special rule:
 
 - If a benchmark passes a node that uses placeholder art, black previews, broken layers, or procedural final art, create a `benchmark_rule` child first. The next accepted node must prove the strengthened benchmark now fails the bad example and only passes real generated/approved assets.
+- If all public benchmark runners are `SKIPPED_NO_SCORE`, create a `benchmark_infrastructure` child first. Do not keep expanding art, camera, or gameplay nodes as if benchmark evidence were complete.
+- If a runner is READY but the expected video/screenshot/mask/prompt input is missing, create a `benchmark_input_protocol` child that generates the missing input artifacts, then rerun the benchmark.
 
 ## Stopping Rules
 
@@ -273,6 +283,7 @@ Stop the whole run only when:
 
 - game can be played from start to victory,
 - hard gates pass,
+- `.game_scientist/benchmark_bootstrap_report.json` proves at least one public runner is READY,
 - final visible assets have generate2dmap/generate2dsprite/image-generation or approved-asset provenance,
 - user-visible screenshots/video confirm assets and motion,
 - user feedback checklist is resolved or explicitly deferred,

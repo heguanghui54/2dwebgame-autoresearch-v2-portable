@@ -7,12 +7,13 @@
 - 从角色描述、环境描述、游戏创意或一张/多张参考图开始。
 - 先生成完整游戏设计方案，再用 critic 和 benchmark 反馈迭代。
 - 面向 Phaser/Vite Web 2D 横版游戏，不默认进入 Unity。
-- 正式高质量游戏必须使用真实图像资产：地图/平台/中景默认走 `generate2dmap` 或等价图像生成流程，角色/敌人/Boss/FX 默认走 `generate2dsprite` 或等价 sprite 生成流程。
+- 正式高质量游戏必须使用真实图像资产：地图/平台/中景默认走内置或外部 `generate2dmap` 子功能，角色/敌人/Boss/FX 默认走内置或外部 `generate2dsprite` 子功能。
+- portable 包已内化 `generate2dmap` / `generate2dsprite` 的核心 skill 文件、references 和处理脚本；外部 peer skill 可用时优先调用，不可用时使用内置副本。
 - 程序化 SVG、Canvas、CSS、Phaser Graphics、几何形状、噪声图和 debug rectangle 只能用于 layout/debug/prototype，不能作为最终美术通过 benchmark。
 - 支持背景、中景、gameplay 层级契约，避免中景变成半透明背景或模糊贴图。
 - 支持真实 Seedance 动态背景流程；没有真实 task id 和下载文件时不会伪造动态，直接退回静态背景。
 - 支持本地 OpenGame-style BH/VU/IA 检查，以及 progressive full-scale layer benchmarking。
-- 公共 benchmark 缺失时记录 `SKIPPED_NO_SCORE`，不伪造官方分数。
+- 先自动配置 public benchmark runner，再进入正式自动迭代。公共 benchmark 缺失时记录 `SKIPPED_NO_SCORE`，不伪造官方分数；如果全部 skipped，不能宣称 final high-quality success。
 
 ## 安装
 
@@ -70,9 +71,78 @@ CODEX_SKILLS_DIR=/custom/codex/skills bash scripts/install.sh
 - `chrome:control-chrome`
 - T2I-CompBench、GenEval、DoveNet/iHarmony、VBench、GameCraft、VideoGameQA
 
-缺失可选能力时，skill 仍可执行设计、规划、脚本生成和本地复刻检查；对应外部 benchmark 或视频生成会记录为 `SKIPPED_NO_SCORE` 或 disabled，不会伪造结果。
+缺失外部 `generate2dmap` / `generate2dsprite` 时，skill 会使用包内的内置副本继续执行地图和角色子功能。缺失外部视频生成服务时，动态背景降级为静态背景。缺失 public benchmark 环境时，会先尝试自动配置，仍无法配置时记录为 `benchmark_infrastructure_missing` / `SKIPPED_NO_SCORE`，不会伪造结果。
 
-但如果缺少 `generate2dmap`、`generate2dsprite`、内置/外部图像生成能力或 approved high-resolution assets，pipeline 只能交付设计方案、技术脚手架或明确标注的 playable prototype。`visual_asset_source_gate` 必须阻止它被报告为“一线高精度成品”。
+但如果缺少内置/外部图像生成能力或 approved high-resolution assets，pipeline 只能交付设计方案、技术脚手架或明确标注的 playable prototype。`visual_asset_source_gate` 必须阻止它被报告为“一线高精度成品”。
+
+## Public Benchmark 环境配置
+
+skill 会在每个项目启动时自动运行：
+
+```bash
+python ~/.codex/skills/2dwebgame-autoresearch-v2/scripts/bootstrap_public_benchmarks.py \
+  --project <your-game-project> \
+  --workspace-root <your-workspace>
+```
+
+正式交付前会用 strict 模式复查：
+
+```bash
+python ~/.codex/skills/2dwebgame-autoresearch-v2/scripts/bootstrap_public_benchmarks.py \
+  --project <your-game-project> \
+  --workspace-root <your-workspace> \
+  --strict
+```
+
+它会在项目内生成：
+
+```text
+<your-game-project>/.game_scientist/benchmarks.json
+<your-game-project>/.game_scientist/benchmark_bootstrap_report.json
+```
+
+自动发现的推荐目录结构：
+
+```text
+<your-workspace>/
+├── GameScientistBenchmarks/
+│   ├── VBench/
+│   ├── T2I-CompBench/
+│   ├── Image-Harmonization-Dataset-iHarmony4/
+│   │   └── DoveNet/
+│   └── checkpoints/
+│       └── dovenet/
+│           └── latest_net_G.pth
+└── scripts/
+    ├── run_remote_vbench.py
+    ├── run_remote_t2i_clipscore.py
+    └── run_remote_dovenet.py
+```
+
+也可以用环境变量显式配置：
+
+```bash
+export GAMESCIENTIST_BENCHMARK_ROOT="/path/to/GameScientistBenchmarks"
+export VBENCH_REPO="/path/to/VBench"
+export VBENCH_PYTHON="python3"
+export VBENCH_COMMAND="/path/to/run_remote_vbench.py"
+export T2I_COMPBENCH_REPO="/path/to/T2I-CompBench"
+export T2I_COMPBENCH_PYTHON="python3"
+export T2I_COMPBENCH_COMMAND="/path/to/run_remote_t2i_clipscore.py"
+export DOVENET_REPO="/path/to/Image-Harmonization-Dataset-iHarmony4/DoveNet"
+export DOVENET_PYTHON="python3"
+export DOVENET_CHECKPOINT="/path/to/latest_net_G.pth"
+export DOVENET_COMMAND="/path/to/run_remote_dovenet.py"
+```
+
+Benchmark 输入协议：
+
+- VBench：Seedance 背景视频、runtime camera sweep、角色动作预览短视频。
+- T2I-CompBench：runtime screenshot、full-scale layer preview、设计 prompt/reference contract。
+- DoveNet/iHarmony：composite runtime image、playfield/midground/foreground mask、可选 same-camera target。
+- 本地 OpenGame-style：Playwright 截图、route trace、controls trace、console/request logs。
+
+如果 `benchmark_bootstrap_report.json` 中 `ready_public_runner_count` 为 0，pipeline 可以继续做设计或 prototype，但不能宣称完成了 public benchmark 自动迭代，也不能作为 final high-quality game 交付。
 
 ## 真实资产 Gate
 
@@ -109,7 +179,9 @@ Volcengine / Seedance / 其他视频生成服务都是可选增强，不是硬�
 │   └── 2dwebgame-autoresearch-v2/
 │       ├── SKILL.md
 │       ├── agents/openai.yaml
-│       └── references/
+│       ├── references/
+│       │   └── embedded/
+│       └── scripts/
 ├── scripts/
 │   ├── doctor.sh
 │   ├── install.sh
