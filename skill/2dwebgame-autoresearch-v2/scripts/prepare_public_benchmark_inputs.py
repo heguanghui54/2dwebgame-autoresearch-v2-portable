@@ -86,12 +86,17 @@ def main() -> int:
         for index, item in enumerate(args.layer_preview, start=1)
     ]
     t2i_ready = runtime_screenshot["status"] == "READY" or any(item["status"] == "READY" for item in layer_previews)
+    t2i_images = []
+    if runtime_screenshot["packaged_path"]:
+        t2i_images.append(runtime_screenshot["packaged_path"])
+    t2i_images.extend(item["packaged_path"] for item in layer_previews if item["packaged_path"])
     t2i_manifest = {
         "created_at": now,
         "benchmark_source": "T2I-CompBench",
         "prompt": args.prompt,
         "prompt_slug": prompt_slug,
         "runner_filename_rule": "Use prompt_slug for filenames; keep full prompt in JSON only.",
+        "images": t2i_images,
         "runtime_screenshot": runtime_screenshot,
         "layer_previews": layer_previews,
         "status": "READY" if t2i_ready else "MISSING_INPUT",
@@ -121,6 +126,9 @@ def main() -> int:
     dovenet_manifest = {
         "created_at": now,
         "benchmark_source": "DoveNet/iHarmony",
+        "runtime_full": composite["packaged_path"],
+        "playfield_mask": mask["packaged_path"],
+        "reference_target": target["packaged_path"] if target["status"] == "READY" else None,
         "composite": composite,
         "mask": mask,
         "target": target,
