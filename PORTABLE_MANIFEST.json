@@ -1,10 +1,10 @@
 {
   "package_name": "2dwebgame-autoresearch-v2-portable",
   "skill_name": "2dwebgame-autoresearch-v2",
-  "version": "0.2.0-portable.20260704",
+  "version": "0.2.1-portable.20260704",
   "created_at": "2026-07-04",
   "default_install_dir": "~/.codex/skills/2dwebgame-autoresearch-v2",
-  "portable_goal": "Install and run the AI-Scientist-style Web 2D game generation skill on another Codex machine with graceful dependency degradation.",
+  "portable_goal": "Install and run the AI-Scientist-style Web 2D game generation skill on another Codex machine with graceful dependency degradation and strict real-visual-asset gates.",
   "required_commands": [
     "bash",
     "git",
@@ -35,5 +35,6 @@
     "VideoGameQA"
   ],
   "video_generation_policy": "Volcengine Seedance and other video generation services are optional. If the user wants to open/login/authorize Volcengine, use it and record task id plus provenance. If no video generator is available, skip video generation and continue with a static background.",
-  "fallback_policy": "Missing external generators or public benchmark runners must be reported as disabled or SKIPPED_NO_SCORE; do not fabricate official scores, task ids, videos, or provenance."
+  "visual_asset_source_policy": "Final high-quality games must use real generated or approved high-resolution image assets. Background, midground, platforms, gates, pickups, and hazards default to generate2dmap or equivalent image-generation workflows. Heroes, enemies, bosses, and FX default to generate2dsprite or equivalent sprite-generation workflows. Procedural SVG, Canvas, CSS, Phaser Graphics, geometry, noise, and debug rectangles are prototype/debug only and must fail final visual_asset_source_gate.",
+  "fallback_policy": "Missing external generators or public benchmark runners must be reported as disabled or SKIPPED_NO_SCORE; do not fabricate official scores, task ids, videos, provenance, or high-quality final status. If real asset generation or approved high-resolution assets are unavailable, only a design plan, scaffold, or clearly marked prototype may be delivered."
 }

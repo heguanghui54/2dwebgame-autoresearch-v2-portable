@@ -75,6 +75,7 @@ Node labels:
 - `seedance_video`
 - `midground_asset`
 - `hero_sprite`
+- `visual_asset_source_gate`
 - `phaser_integration`
 - `camera_tuning`
 - `collision_tuning`
@@ -88,6 +89,8 @@ Bug labels:
 - `visual_buggy`
 - `gameplay_buggy`
 - `provenance_buggy`
+- `placeholder_art_buggy`
+- `benchmark_false_positive_buggy`
 - `regression_buggy`
 - `user_intent_buggy`
 
@@ -115,6 +118,8 @@ Branch only high-impact assets:
 - hero silhouette/color,
 - platform material language.
 
+Production-quality branches must call `generate2dmap`, `generate2dsprite`, image generation, user high-resolution assets, or approved existing production assets. Code-drawn geometry, SVG/Canvas/CSS art, procedural noise, and Phaser Graphics shapes can only be prototype/debug branches.
+
 Default branch budget:
 
 - 2 variants for background or hero if critic is uncertain.
@@ -123,20 +128,23 @@ Default branch budget:
 
 Use screenshot/LLM visual review before expensive video generation.
 
+Do not let a branch advance to integration unless `visual_asset_source_gate` passes. If the gate fails, expand an asset-generation child node rather than tuning camera or gameplay.
+
 ### Stage 3: Playable Baseline
 
 Use greedy stabilization.
 
-Goal: get a playable path from spawn to victory with placeholder or selected assets.
+Goal: get a playable path from spawn to victory with selected real assets. If placeholders are used only to debug route logic, mark the node `prototype_only` and return to Stage 2 before any final-quality claim.
 
 Fix hard failures in this order:
 
 1. build/server blank screen,
 2. manifest loading,
-3. player spawn and controls,
-4. collisions,
-5. route continuity,
-6. win and restart.
+3. visual asset source gate,
+4. player spawn and controls,
+5. collisions,
+6. route continuity,
+7. win and restart.
 
 Do not branch art here unless art breaks gameplay readability.
 
@@ -175,6 +183,7 @@ Classify user feedback before editing.
 - Asset-style feedback: bounded asset branch.
 - Gameplay difficulty feedback: local gameplay tuning.
 - Benchmark-miss feedback: add a benchmark, then fix.
+- Placeholder-art feedback: repair `visual_asset_source_gate` and benchmark first, then regenerate assets with `generate2dmap` / `generate2dsprite`.
 
 Examples from the first successful game:
 
@@ -194,6 +203,7 @@ After each accepted node, lock the passing evidence:
 - benchmark JSON,
 - selected manifest,
 - asset provenance,
+- visual asset source report,
 - user-feedback checklist.
 
 Do not accept a new node if it breaks a locked hard gate unless explicitly replacing that gate with a stricter one.
@@ -206,6 +216,8 @@ Hard gates:
 
 - build health pass,
 - playable start-to-win route,
+- visual asset source gate pass,
+- no procedural placeholder art in final selected visual stack,
 - no fake Seedance,
 - no blank/incorrect layer,
 - final door at visual/world right edge,
@@ -240,8 +252,13 @@ Do not expand a node when:
 
 - it lacks provenance,
 - screenshots do not use its assets,
+- final art is procedural/debug/placeholder,
 - it fixes a metric by degrading user intent,
 - it needs broad rework but was only meant to tune a numeric parameter.
+
+Special rule:
+
+- If a benchmark passes a node that uses placeholder art, black previews, broken layers, or procedural final art, create a `benchmark_rule` child first. The next accepted node must prove the strengthened benchmark now fails the bad example and only passes real generated/approved assets.
 
 ## Stopping Rules
 
@@ -256,7 +273,7 @@ Stop the whole run only when:
 
 - game can be played from start to victory,
 - hard gates pass,
+- final visible assets have generate2dmap/generate2dsprite/image-generation or approved-asset provenance,
 - user-visible screenshots/video confirm assets and motion,
 - user feedback checklist is resolved or explicitly deferred,
 - final handoff includes URL, assets, manifest, benchmark, screenshots, and provenance.
-

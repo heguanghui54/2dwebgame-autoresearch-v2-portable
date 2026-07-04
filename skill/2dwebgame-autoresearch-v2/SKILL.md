@@ -1,6 +1,6 @@
 ---
 name: 2dwebgame-autoresearch-v2
-description: Use when the user wants a Chinese AI-Scientist-style end-to-end pipeline for Phaser/Vite Web 2D game generation from a game idea, character/environment description, or one/more reference images. The skill creates and critic-iterates a structured design plan, generates layered 2.5D scene assets and sprites, uses real Seedance dynamic backgrounds when authorized, runs progressive full-scale layer benchmarks before runtime integration, performs local OpenGame-style BH/VU/IA playability checks, records public benchmark adapters as official/faithful/strict/SKIPPED_NO_SCORE, and iteratively modifies only failed game nodes from benchmark feedback until a high-quality playable Web game is verified.
+description: Use when the user wants a Chinese AI-Scientist-style end-to-end pipeline for Phaser/Vite Web 2D game generation from a game idea, character/environment description, or one/more reference images. The skill creates and critic-iterates a structured design plan, requires real high-quality generated or approved existing image assets through generate2dmap/generate2dsprite or equivalent image-generation workflows, rejects procedural/code-drawn placeholder art as a final product, uses real Seedance dynamic backgrounds only when authorized, runs progressive full-scale layer benchmarks before runtime integration, performs local OpenGame-style BH/VU/IA playability checks, records public benchmark adapters as official/faithful/strict/SKIPPED_NO_SCORE, and iteratively modifies only failed game nodes from benchmark feedback until a high-quality playable Web game is verified.
 ---
 
 # 2DWebGame AutoResearch v2
@@ -34,6 +34,7 @@ v2 在 v1 基础上新增或强化：
 - `references/game-design-template.md`
 - `references/iteration-search-strategy.md`
 - `references/pipeline-cn-v1-base.md`
+- `references/successful-game-lessons.md`
 
 执行完整任务时优先读本 `SKILL.md`。需要更细的模板或流程时，再读取上述 v2 本地参考文件，不要读取 v1 路径。
 
@@ -48,6 +49,9 @@ v2 在 v1 基础上新增或强化：
 - 每个节点必须记录 parent、改动原因、prompt/patch、benchmark、截图/视频、用户反馈、回归项、pass/fail 和下一步。
 - 只从当前最佳通过节点继续；如果新节点修复一个指标但破坏 hard gate 或用户意图，必须回滚。
 - v2 额外加入 progressive full-scale layer benchmarking、strict/advisory policy、public benchmark `SKIPPED_NO_SCORE` 规则和 benchmark-feedback iteration 控制器。
+- 高质量游戏不能使用程序化占位图形作为最终美术。Canvas/SVG/HTML/CSS/几何图形/脚本绘制只允许做 debug、layout guide、碰撞可视化或临时 playable baseline；最终背景、平台、中景、角色、敌人、Boss、FX 必须来自 `generate2dmap`、`generate2dsprite`、内置 `image_gen`、用户提供的高精度资产或明确批准的现有生产资产。
+- 如果本轮没有真实图像生成能力或没有可用高精度资产，可以交付 prototype，但不得宣称“高精度”“一线效果”“制作成功”。benchmark 必须 hard-fail `visual_asset_source_gate`。
+- 如果 benchmark 让程序化占位资产、黑图、噪声墙、纯色块、SVG 几何图、debug rectangle 或 runtime shape-drawn 角色通过，先修 benchmark，再继续做游戏。
 
 ## 输入契约
 
@@ -65,8 +69,8 @@ v2 在 v1 基础上新增或强化：
 
 优先使用：
 
-- `generate2dmap`：side-scroll 地图、runtime objects、分层契约。
-- `generate2dsprite`：角色动作、透明帧、动作一致性 QC。
+- `generate2dmap`：side-scroll 地图、runtime objects、分层契约。高质量背景、场景层、平台/门/机关/拾取物视觉资产默认必须走它或等价图像生成流程，不要用脚本画最终地图。
+- `generate2dsprite`：角色动作、透明帧、动作一致性 QC。高质量主角、敌人、Boss、FX 默认必须走它或等价图像生成流程，不要用代码绘制最终角色。
 - `game-studio:phaser-2d-game`：Phaser/Vite 场景、输入、HUD、相机。
 - `game-studio:game-playtest`：可玩性与通关测试。
 - `volcengine:volcengine` / `chrome:control-chrome`：用户授权后调用火山引擎 Seedance。
@@ -83,12 +87,13 @@ v2 在 v1 基础上新增或强化：
 1. `repo_preflight`：检查项目、脚本、服务、已有 manifest 和 benchmark。
 2. `reference_analysis`：复制参考图，分析风格、色彩、空间、动态线索、禁止项。
 3. `idea_design_search`：生成或补全设计方案，critic 最多 3 轮。
-4. `asset_generation`：背景、中景、平台、角色、FX、Seedance 动态背景。
-5. `progressive_layer_composition_benchmark`：资产进入 Phaser 前，做全尺寸逐层合成与评测。
-6. `phaser_runtime_integration`：manifest 驱动加载、输入、碰撞、相机、HUD、debug API。
-7. `runtime_benchmark`：构建、服务、截图、视频、通关、动作、相机、层级、用户反馈。
-8. `benchmark_feedback_iteration`：按失败项只修改对应节点，复测，接受或回滚。
-9. `handoff`：交付 URL、图片/视频/JSON 证据、得分、剩余风险。
+4. `asset_generation`：用 `generate2dmap` / `generate2dsprite` / image generation 生成背景、中景、平台、角色、FX、Seedance 动态背景。
+5. `visual_asset_source_gate`：检查每个可见最终资产的来源、prompt、原图、QC、非占位证据；程序化占位美术必须阻断。
+6. `progressive_layer_composition_benchmark`：资产进入 Phaser 前，做全尺寸逐层合成与评测。
+7. `phaser_runtime_integration`：manifest 驱动加载、输入、碰撞、相机、HUD、debug API。
+8. `runtime_benchmark`：构建、服务、截图、视频、通关、动作、相机、层级、用户反馈。
+9. `benchmark_feedback_iteration`：按失败项只修改对应节点，复测，接受或回滚。
+10. `handoff`：交付 URL、图片/视频/JSON 证据、得分、剩余风险。
 
 ## 设计 Gate
 
@@ -107,6 +112,7 @@ v2 在 v1 基础上新增或强化：
 - 背景、中景、gameplay 层级契约。
 - Seedance 动态背景 prompt 和 provenance。
 - 角色动作、脚底基准、动作连续性、独立 FX。
+- 资产来源计划：哪些用 `generate2dmap`，哪些用 `generate2dsprite`，哪些用 Seedance，哪些复用用户高精度资产；禁止把程序化图形当最终美术。
 - 相机横向端点、纵向跳跃视差、攻击推近镜头。
 - benchmark 清单和截图验收点。
 
@@ -119,6 +125,32 @@ critic hard-fail：
 - 角色动作、碰撞、相机规则不可测试。
 - Seedance provenance 不可追溯。
 - 用户反馈无法转成 benchmark 或截图检查。
+- 背景、平台、中景、角色、敌人、Boss 或 FX 计划使用 Canvas/SVG/HTML/CSS/几何图形/脚本绘制作为最终高精度资产。
+- 没有 `generate2dmap` / `generate2dsprite` / image generation / approved existing asset 的产物路径和 provenance，却宣称高质量资产完成。
+
+## 真实图像资产 Gate
+
+这是 v2 的硬门槛，优先级高于普通 VU 分数。
+
+每个最终可见资产必须在 manifest 中声明：
+
+- `asset_id`
+- `asset_role`: `background | midground | platform | gate | pickup | hazard | hero | enemy | boss | fx`
+- `asset_source`: `generate2dmap | generate2dsprite | image_gen | user_highres_asset | approved_existing_asset | seedance_video | procedural_debug`
+- `source_prompt_or_reference`
+- `raw_asset_path`
+- `processed_asset_path`
+- `qc_report_path`
+- `used_in_runtime_screenshot: true|false`
+
+接受规则：
+
+- `background`、`midground`、`platform`、`gate`、`pickup`、`hazard` 默认来自 `generate2dmap` 或等价图像生成流程。
+- `hero`、`enemy`、`boss`、`fx` 默认来自 `generate2dsprite` 或等价图像生成流程。
+- 用户给的低精度参考图只能作为风格参考，不能直接放大当最终高精度资产。
+- `procedural_debug` 可以存在于 prototype、debug overlay、collision preview、layout guide，但不能进入 final selected visual stack。
+- 如果为了快速 playable baseline 使用程序化方块/几何角色，必须在报告中标注 `prototype_only`，并继续回到资产节点生成真实图像资产；不能 handoff 为最终成功。
+- Benchmark 不能只看非空、熵或文件大小；必须检查资产来源、实际截图中是否可见、是否为真实图像/视频生成结果、是否有 prompt/provenance/QC。
 
 ## 层级与资产规则
 
@@ -216,7 +248,9 @@ far_background -> midground_objects -> near/atmospheric overlays -> gameplay run
 
 - 文件存在、尺寸符合 contract。
 - provenance/source-set 存在。
+- `asset_source` 不是 `procedural_debug`，除非本轮明确只交付 prototype。
 - 非空、非 placeholder、非模糊色块。
+- 非 Canvas/SVG 几何占位、非纯色矩形、非程序化噪声墙、非 debug shape。
 - 中景 alpha coverage 合理，不是满屏背景。
 - 中景左右/底部接地，不漂浮。
 - 无 key color / 紫边 / 白边 / 黑边泄漏。
@@ -285,6 +319,8 @@ Phaser runtime 必须证明选中的全尺寸 layer stack 确实被导入并可�
 - 初始截图非空。
 - 动态背景启用状态诚实。
 - 实际截图使用选中的背景、中景、角色、平台、门。
+- 实际截图使用真实图像资产，不是程序化占位图形。
+- 角色、敌人、Boss 和 FX 的 runtime 渲染来自生成图像/sprite sheet/approved asset，而不是 Graphics API 画圆、矩形、线段或简化 SVG。
 - 相机横向移动时远景慢、中景中等、gameplay 快。
 - 角色跳跃时远景下移最多，中景下移更少，gameplay 稳定。
 - 攻击技能 camera zoom/easing 自然，回拉不抖。
@@ -329,6 +365,8 @@ npm test
 - 纵向跳跃视差正确：远景位移 > 中景位移 > gameplay 稳定。
 - 中景真 alpha，非灰度通道图，非半透明贴纸。
 - 平台脚底接触面正确，不按草花最高 alpha。
+- 可见资产来源 gate 通过：背景/中景/平台/角色/敌人/Boss/FX 均有真实图像资产 provenance。
+- 程序化占位图、黑图、灰噪声图、纯色形状、debug rectangle 不能通过 VU。
 - 角色颜色在背景中突出，动作可读。
 - 攻击/技能推近镜头自然，回拉不抖。
 - 终点门与视觉最右端对齐。
@@ -391,6 +429,11 @@ benchmark/results/iteration/latest_iteration_report.md
 - `jump_y_parallax_fail`：调纵向 parallax 公式，防止方向反或中景位移过大。
 - `foot_contact_fail`：调 collision/contact plane，不重画角色。
 - `hero_action_readability_fail`：调角色颜色、动作帧、脚底基准、FX 分离。
+- `visual_asset_source_missing`：回到资产生成节点，补齐 generate2dmap/generate2dsprite/image_gen/approved asset 产物和 provenance。
+- `procedural_placeholder_art_used`：阻断最终交付；用真实图像资产替换程序化 Canvas/SVG/shape art。
+- `map_not_generate2dmap_pipeline`：背景/平台/中景没有走地图图像生成或等价流程，回到 `generate2dmap side_scroll_mode`。
+- `sprite_not_generate2dsprite_qc`：主角/敌人/Boss/FX 没有真实 sprite 生成和动作 QC，回到 `generate2dsprite hero_action_bundle`。
+- `benchmark_false_positive_placeholder_pass`：benchmark 放过了占位图或黑图，先修 benchmark，再重跑，不要继续调游戏参数。
 - `playthrough_fail`：调关卡路线、跳跃高度、门位置、敌人/拾取物。
 - `restart_fail`：修状态重置。
 - `public_layer_fit_benchmarks_skipped`：这是 benchmark infrastructure failure，不允许因此修改游戏内容；配置公共 runner 或保留 advisory warning。
@@ -432,6 +475,7 @@ benchmark/results/iteration/latest_iteration_report.md
 - 资产目录。
 - manifest 路径。
 - Seedance 是否真实调用、task id、输出路径。
+- 每个最终可见资产的来源：`generate2dmap` / `generate2dsprite` / `image_gen` / user high-res / existing approved / Seedance / skipped。
 - progressive layer previews 路径。
 - strict/advisory benchmark 报告路径。
 - BH/VU/IA 分数。
@@ -456,3 +500,5 @@ benchmark/results/iteration/latest_iteration_report.md
 - 不要按草花最高 alpha 设置站立线。
 - 不要在未真实调用 Seedance 时伪造动态视频。
 - 不要为了过 benchmark 放宽真实失败；应该改 benchmark 让它捕捉真实问题。
+- 不要用程序化 SVG、Canvas、Phaser Graphics、HTML/CSS 形状或脚本绘图冒充高精度最终美术。
+- 不要让“能玩”“能 build”“截图非空”掩盖美术资产失败；这只能说明 prototype 可运行，不能说明高质量游戏完成。

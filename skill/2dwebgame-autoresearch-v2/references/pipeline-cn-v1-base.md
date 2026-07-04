@@ -5,10 +5,12 @@
 ## 0. 总原则
 
 - 先设计，后生成。任何地图、角色、Seedance、Phaser 代码之前，必须先通过 `game_design_plan` 和 critic gate。
+- 先生成真实图像资产，再做正式 runtime。`generate2dmap` / `generate2dsprite` 或等价图像生成流程是高质量地图、平台、角色、敌人、Boss、FX 的默认入口。
 - 先验证，再宣称成功。构建、截图、玩法、视觉、用户反馈都要有证据。
 - 不追求一次命中。像 AI Scientist v2 一样，把候选设计和每轮修改当作节点，记录失败原因，选择最强节点继续。
 - 不伪造外部资产。Seedance 没有真实调用或没有真实下载结果，就不能把本地合成物冒充动态背景。
 - 不把 benchmark 当遮羞布。benchmark 要捕捉真实观感问题，不能为了过关放宽错误规则。
+- 不把程序化占位图当最终美术。Canvas/SVG/HTML/CSS/Phaser Graphics/几何形状/脚本绘图只允许做 layout、debug、collision preview 或 prototype，不得作为“高精度成品”通过。
 
 ## 1. 输入与运行目录
 
@@ -68,6 +70,7 @@ public/assets/web-pipeline/<run-slug>/
 - 背景、中景、gameplay 层级规则。
 - 相机、视差、攻击推近镜头规则。
 - 资产清单。
+- 真实图像资产来源计划：哪些走 `generate2dmap`，哪些走 `generate2dsprite`，哪些走 Seedance，哪些使用用户高精度资产或 approved existing asset。
 - benchmark 清单。
 - 风险。
 
@@ -116,6 +119,50 @@ hard-fail 示例：
 - Seedance 要求无法追溯 provenance。
 - 角色动作没有脚底基准和动作连续性规则。
 - 用户反馈无法转成截图或 benchmark。
+- 背景、平台、中景、角色、敌人、Boss 或 FX 计划使用程序化图形作为最终高精度资产。
+- 没有真实图像生成或 approved asset provenance，却宣称能达到高质量成品。
+
+## 4.5 真实图像资产来源 Gate
+
+这是正式制作的硬门槛。它必须在地图/角色资产进入 Phaser runtime 之前运行。
+
+每个 final visible asset 必须在 `asset_manifest.json` 中声明：
+
+```json
+{
+  "asset_id": "hero_run",
+  "asset_role": "hero",
+  "asset_source": "generate2dsprite",
+  "source_prompt_or_reference": "...",
+  "raw_asset_path": "...",
+  "processed_asset_path": "...",
+  "qc_report_path": "...",
+  "used_in_runtime_screenshot": false
+}
+```
+
+允许的正式来源：
+
+- `generate2dmap`
+- `generate2dsprite`
+- `image_gen`
+- `user_highres_asset`
+- `approved_existing_asset`
+- `seedance_video`
+
+`procedural_debug` 只能用于 debug overlay、collision guide、layout sketch 或 playable prototype。只要它出现在 final selected visual stack 中，节点必须 hard-fail。
+
+角色和地图的默认约束：
+
+- 背景、中景、平台、门、机关、拾取物、危害物：默认使用 `generate2dmap side_scroll_mode` 或等价图像生成流程。
+- 主角、敌人、Boss、projectile、impact、slash、dash、parry FX：默认使用 `generate2dsprite hero_action_bundle` 或等价 sprite 生成流程。
+
+benchmark 必须检查：
+
+- source/provenance/QC 路径存在。
+- layer preview 和 runtime screenshot 中真正使用了该资产。
+- 资产不是黑图、纯色块、噪声墙、几何图、低精度放大图或 Phaser Graphics 形状。
+- 如果 benchmark 曾让上述错误通过，记录 `benchmark_false_positive_placeholder_pass`，先修 benchmark，再继续制作。
 
 ## 5. 地图与层级资产节点
 
@@ -126,6 +173,8 @@ hard-fail 示例：
 ```
 
 不要把背景拆成多层模糊图。背景是一张完整远景；中景是在背景和 gameplay 之间增加的具体物体，不是第二张满屏背景。
+
+地图资产必须优先调用 `generate2dmap side_scroll_mode` 或等价 image-generation workflow。不能用脚本画几何背景、噪声背景、SVG 平台、矩形门、圆形拾取物来冒充最终美术。
 
 中景规则：
 
@@ -145,6 +194,7 @@ hard-fail 示例：
 - 平台/机关/门/拾取物 atlas。
 - 角色动作 sprite sheet 或 contact sheet。
 - 集成后的关键截图。
+- provenance/QC JSON，说明资产来自 `generate2dmap`、`generate2dsprite`、image generation、用户高精度资产或 approved existing asset。
 
 ## 6. Seedance 动态背景节点
 
@@ -195,6 +245,7 @@ idle, walk, run, jump, dash, light_attack, heavy_attack, parry, skill_cast, hurt
 - 每个动作独立生成、抠底、切帧、QC。
 - 所有站立/跑步/攻击帧脚底基准一致。
 - 刀光、残影、弹道、命中特效是独立 FX。
+- 不允许用 Phaser Graphics 圆形、矩形、线段、CSS/SVG 小人或 procedural sprite 作为最终角色。
 
 输出：
 
@@ -268,6 +319,8 @@ npm run benchmark:restart-after-victory
 - 横向端点正确。
 - 跳跃纵向视差方向和幅度正确。
 - 动态背景 provenance 真实。
+- 可见资产来源 gate 通过，且截图中能看到 selected assets。
+- 没有程序化占位图、debug rectangle、黑图、纯色块、噪声墙、SVG 几何图冒充最终资产。
 - 中景真 alpha，且不是灰度通道图。
 - 角色动作可读。
 - 脚底接触面正确。
@@ -302,6 +355,8 @@ SKIPPED_NO_SCORE
 按失败节点回退：
 
 - 设计失败：重写设计，不生成资产。
+- 可见资产来源失败：回到 `generate2dmap` / `generate2dsprite` / image generation / approved asset 节点，不能继续调 runtime 参数来掩盖。
+- benchmark 放过占位图：先修 benchmark 规则，再重跑，不要继续声明成功。
 - 背景失败：重写背景 prompt 或重做 Seedance。
 - 中景失败：重做抠像/颜色/位置，不改玩法。
 - 角色失败：重做动作或脚底基准，不改地图。
@@ -335,4 +390,7 @@ SKIPPED_NO_SCORE
 - hard gates 全通过。
 - 用户能打开本地 URL。
 - 截图/视频证明当前游戏使用的是选中资产。
+- `asset_manifest.json` 证明 final visible assets 不来自 `procedural_debug`。
+- 背景/平台/中景等地图资产有 `generate2dmap` 或等价图像生成 provenance。
+- 主角/敌人/Boss/FX 有 `generate2dsprite` 或等价 sprite 生成 provenance。
 - 用户反馈的问题已经修复或转成可复测 benchmark。

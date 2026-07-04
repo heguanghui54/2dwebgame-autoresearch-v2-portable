@@ -41,6 +41,7 @@ Each candidate must include:
 - `background_dynamic_plan`
 - `midground_plan`
 - `character_action_plan`
+- `visual_asset_source_plan`
 - `asset_manifest_plan`
 - `benchmark_plan`
 - `risk_register`
@@ -122,6 +123,31 @@ For midground:
 - must visually connect to bottom when designed as rooted rocks/trees,
 - must use softer edges only for fog, glow, and tiny vines.
 
+### Visual Asset Source Plan
+
+Before implementation, declare how every final visible asset will be produced. This is a hard gate, not documentation after the fact.
+
+Required mapping:
+
+- background, midground, platforms, gates, pickups, hazards: `generate2dmap` side-scroll mode or an equivalent image-generation / approved high-resolution asset workflow.
+- hero, enemies, boss, slash/projectile/impact/dash/parry FX: `generate2dsprite` hero/action bundle mode or an equivalent sprite-generation / approved high-resolution asset workflow.
+- dynamic background video: real Seedance or equivalent external service only when authorized and provenance is available.
+- debug overlays, collision guides, layout sketches: may use Canvas/SVG/Phaser Graphics, but must be marked `procedural_debug` and excluded from final selected visual stack.
+
+For each asset role, the plan must include:
+
+- intended generator or approved asset source,
+- source prompt/reference image,
+- raw output path,
+- processed output path,
+- QC/contact-sheet/preview path,
+- runtime screenshot proof requirement.
+
+Hard rule:
+
+- Low-resolution user references are style/input references only. They cannot be enlarged and shipped as final high-precision assets.
+- Procedural Canvas/SVG/HTML/CSS/Phaser Graphics/geometry art cannot be accepted as final high-quality background, platform, character, enemy, boss, or FX art.
+
 ### Camera And Parallax
 
 Define:
@@ -170,6 +196,7 @@ State:
 Define hard gates before implementation:
 
 - Build Health.
+- Visual Asset Source Gate.
 - Visual Usability.
 - Intent Alignment.
 - playfield fit.
@@ -201,6 +228,7 @@ Criteria:
 - asset feasibility,
 - benchmarkability,
 - production risk.
+- real visual asset source feasibility.
 
 Iterate up to 3 design rounds.
 
@@ -209,9 +237,17 @@ Pass only when:
 - average score >= 8,
 - no criterion below 7,
 - no hard-fail,
-- all benchmark gates are testable.
+- all benchmark gates are testable,
+- final visual assets have a concrete generate2dmap/generate2dsprite/image-generation or approved-asset path.
 
 If the critic fails the design after 3 rounds, stop implementation and report the blocker.
+
+Additional critic hard-fails:
+
+- The plan uses code-drawn shapes, SVG, Canvas, CSS, Phaser Graphics, procedural noise, or debug rectangles as final high-quality art.
+- The plan lacks a source/provenance/QC path for background, midground, platform art, hero sprite, enemy/boss sprite, or FX.
+- The plan relies on benchmarks that only check non-empty screenshots and do not check whether real generated assets are visible.
+- The plan would allow a playable prototype to be called a final high-quality game without returning to real asset generation.
 
 ## Design Decision Log
 
@@ -223,4 +259,3 @@ Record:
 - user constraints preserved,
 - assumptions,
 - risks deferred to implementation.
-
