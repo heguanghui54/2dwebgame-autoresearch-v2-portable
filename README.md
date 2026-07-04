@@ -7,15 +7,20 @@
 - 从角色描述、环境描述、游戏创意或一张/多张参考图开始。
 - 先生成完整游戏设计方案，再用 critic 和 benchmark 反馈迭代。
 - 面向 Phaser/Vite Web 2D 横版游戏，不默认进入 Unity。
+- 正式高质量游戏必须使用真实图像资产：地图/平台/中景默认走内置或外部 `generate2dmap` 子功能，角色/敌人/Boss/FX 默认走内置或外部 `generate2dsprite` 子功能。
+- portable 包已内化 `generate2dmap` / `generate2dsprite` 的核心 skill 文件、references 和处理脚本；外部 peer skill 可用时优先调用，不可用时使用内置副本。
+- 程序化 SVG、Canvas、CSS、Phaser Graphics、几何形状、噪声图和 debug rectangle 只能用于 layout/debug/prototype，不能作为最终美术通过 benchmark。
 - 支持背景、中景、gameplay 层级契约，避免中景变成半透明背景或模糊贴图。
 - 支持真实 Seedance 动态背景流程；没有真实 task id 和下载文件时不会伪造动态，直接退回静态背景。
 - 支持本地 OpenGame-style BH/VU/IA 检查，以及 progressive full-scale layer benchmarking。
-- 公共 benchmark 缺失时记录 `SKIPPED_NO_SCORE`，不伪造官方分数。
+- 先自动配置 public benchmark runner，再进入正式自动迭代。公共 benchmark 缺失时记录 `SKIPPED_NO_SCORE`，不伪造官方分数；如果全部 skipped，不能宣称 final high-quality success。
+- Runner READY 后还必须准备输入包并实际执行。`ready_public_runner_count > 0` 不是评估完成，`PENDING_NOT_EXECUTED` 不能作为高质量最终交付证据。
+- Critic、审核报告、public benchmark report 和用户反馈中的可执行建议必须转成 SABG 搜索节点继续迭代，不能只写报告停止。
 
 ## 安装
 
 ```bash
-git clone https://github.com/<your-github-user>/2dwebgame-autoresearch-v2-portable.git
+git clone https://github.com/heguanghui54/2dwebgame-autoresearch-v2-portable.git
 cd 2dwebgame-autoresearch-v2-portable
 bash scripts/doctor.sh
 bash scripts/install.sh
@@ -68,7 +73,125 @@ CODEX_SKILLS_DIR=/custom/codex/skills bash scripts/install.sh
 - `chrome:control-chrome`
 - T2I-CompBench、GenEval、DoveNet/iHarmony、VBench、GameCraft、VideoGameQA
 
-缺失可选能力时，skill 仍可执行设计、规划、脚本生成和本地复刻检查；对应外部 benchmark 或视频生成会记录为 `SKIPPED_NO_SCORE` 或 disabled，不会伪造结果。
+缺失外部 `generate2dmap` / `generate2dsprite` 时，skill 会使用包内的内置副本继续执行地图和角色子功能。缺失外部视频生成服务时，动态背景降级为静态背景。缺失 public benchmark 环境时，会先尝试自动配置，仍无法配置时记录为 `benchmark_infrastructure_missing` / `SKIPPED_NO_SCORE`，不会伪造结果。
+
+但如果缺少内置/外部图像生成能力或 approved high-resolution assets，pipeline 只能交付设计方案、技术脚手架或明确标注的 playable prototype。`visual_asset_source_gate` 必须阻止它被报告为“一线高精度成品”。
+
+## Public Benchmark 环境配置
+
+skill 会在每个项目启动时自动运行：
+
+```bash
+python ~/.codex/skills/2dwebgame-autoresearch-v2/scripts/bootstrap_public_benchmarks.py \
+  --project <your-game-project> \
+  --workspace-root <your-workspace>
+```
+
+正式交付前会用 strict 模式复查：
+
+```bash
+python ~/.codex/skills/2dwebgame-autoresearch-v2/scripts/bootstrap_public_benchmarks.py \
+  --project <your-game-project> \
+  --workspace-root <your-workspace> \
+  --strict
+```
+
+它会在项目内生成：
+
+```text
+<your-game-project>/.game_scientist/benchmarks.json
+<your-game-project>/.game_scientist/benchmark_bootstrap_report.json
+```
+
+自动发现的推荐目录结构：
+
+```text
+<your-workspace>/
+├── GameScientistBenchmarks/
+│   ├── VBench/
+│   ├── T2I-CompBench/
+│   ├── Image-Harmonization-Dataset-iHarmony4/
+│   │   └── DoveNet/
+│   └── checkpoints/
+│       └── dovenet/
+│           └── latest_net_G.pth
+└── scripts/
+    ├── run_remote_vbench.py
+    ├── run_remote_t2i_clipscore.py
+    └── run_remote_dovenet.py
+```
+
+也可以用环境变量显式配置：
+
+```bash
+export GAMESCIENTIST_BENCHMARK_ROOT="/path/to/GameScientistBenchmarks"
+export VBENCH_REPO="/path/to/VBench"
+export VBENCH_PYTHON="python3"
+export VBENCH_COMMAND="/path/to/run_remote_vbench.py"
+export T2I_COMPBENCH_REPO="/path/to/T2I-CompBench"
+export T2I_COMPBENCH_PYTHON="python3"
+export T2I_COMPBENCH_COMMAND="/path/to/run_remote_t2i_clipscore.py"
+export DOVENET_REPO="/path/to/Image-Harmonization-Dataset-iHarmony4/DoveNet"
+export DOVENET_PYTHON="python3"
+export DOVENET_CHECKPOINT="/path/to/latest_net_G.pth"
+export DOVENET_COMMAND="/path/to/run_remote_dovenet.py"
+```
+
+Benchmark 输入协议：
+
+- VBench：Seedance 背景视频、runtime camera sweep、角色动作预览短视频。
+- T2I-CompBench：runtime screenshot、full-scale layer preview、设计 prompt/reference contract。
+- DoveNet/iHarmony：composite runtime image、playfield/midground/foreground mask、可选 same-camera target。
+- 本地 OpenGame-style：Playwright 截图、route trace、controls trace、console/request logs。
+
+如果 `benchmark_bootstrap_report.json` 中 `ready_public_runner_count` 为 0，pipeline 可以继续做设计或 prototype，但不能宣称完成了 public benchmark 自动迭代，也不能作为 final high-quality game 交付。
+
+Bootstrap 之后必须准备输入包：
+
+```bash
+python ~/.codex/skills/2dwebgame-autoresearch-v2/scripts/prepare_public_benchmark_inputs.py \
+  --project <your-game-project> \
+  --prompt "<short scene prompt>" \
+  --runtime-screenshot <runtime_start.png> \
+  --layer-preview <full_scene.png> \
+  --runtime-video <camera_sweep.mp4> \
+  --dovenet-composite <runtime_full.png> \
+  --dovenet-mask <mask.png>
+```
+
+它会生成：
+
+```text
+<your-game-project>/benchmark/results/public_benchmarks/inputs/t2i/input_manifest.json
+<your-game-project>/benchmark/results/public_benchmarks/inputs/vbench/video_manifest.json
+<your-game-project>/benchmark/results/public_benchmarks/inputs/dovenet/input_manifest.json
+<your-game-project>/benchmark/results/public_benchmarks/inputs/public_benchmark_input_pack_report.json
+```
+
+执行规则：
+
+- T2I prompt 文件名只使用短 `prompt_slug`，完整 prompt 写在 JSON，避免长 prompt 文件名导致 runner 失败。
+- VBench 必须使用真实 MP4/WebM；没有 Seedance 视频时用 runtime camera sweep。
+- DoveNet/iHarmony 必须有 composite + mask；没有 same-camera target 时只能 diagnostic/advisory，不能写严格官方分数。
+- READY runner + 输入存在时必须执行并保存 `public_benchmark_execution_report.json`；执行失败要记录命令、退出码、stdout/stderr tail。
+- 自定义游戏截图/视频默认 `leaderboard_comparable: false`，除非使用官方数据集、prompt suite、协议和入口。
+
+## 真实资产 Gate
+
+正式节点进入 Phaser runtime 前，必须为每个最终可见资产记录：
+
+- `asset_id`
+- `asset_role`
+- `asset_source`
+- `source_prompt_or_reference`
+- `raw_asset_path`
+- `processed_asset_path`
+- `qc_report_path`
+- `used_in_runtime_screenshot`
+
+允许的正式来源包括 `generate2dmap`、`generate2dsprite`、`image_gen`、`user_highres_asset`、`approved_existing_asset` 和真实 `seedance_video`。
+
+`procedural_debug` 只允许出现在 debug overlay、collision preview、layout sketch 或 prototype 中。只要它进入 final selected visual stack，benchmark 必须 hard-fail，并生成 `procedural_placeholder_art_used` 或 `visual_asset_source_missing`。
 
 ## 视频生成服务策略
 
@@ -88,7 +211,9 @@ Volcengine / Seedance / 其他视频生成服务都是可选增强，不是硬�
 │   └── 2dwebgame-autoresearch-v2/
 │       ├── SKILL.md
 │       ├── agents/openai.yaml
-│       └── references/
+│       ├── references/
+│       │   └── embedded/
+│       └── scripts/
 ├── scripts/
 │   ├── doctor.sh
 │   ├── install.sh
@@ -138,3 +263,7 @@ git push -u origin main
 - `skill/2dwebgame-autoresearch-v2/SKILL.md` 的 frontmatter 名称与目录一致。
 - 包内没有本机绝对路径。
 - 缺少外部生成或公共 benchmark 时，流程必须降级为记录 `SKIPPED_NO_SCORE`，不能伪造分数或动态视频。
+- Public runner READY 后必须有输入包和执行结果，或明确阻断原因；不能停在 `READY_ONLY` / `PENDING_NOT_EXECUTED`。
+- 审核建议必须进入搜索/迭代队列，交付报告要说明每条建议已实施、回滚或延期。
+- 旧 SVG/contact sheet/manifest/debug/prototype 资产不能留在 selected asset 目录中误导评审。
+- `visual_asset_source_gate` 能阻止程序化占位美术、黑图、纯色块、噪声墙、SVG 几何图和低精度放大图进入最终交付。

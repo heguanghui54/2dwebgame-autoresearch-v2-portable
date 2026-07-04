@@ -1,6 +1,6 @@
 ---
 name: 2dwebgame-autoresearch-v2
-description: Use when the user wants a Chinese AI-Scientist-style end-to-end pipeline for Phaser/Vite Web 2D game generation from a game idea, character/environment description, or one/more reference images. The skill creates and critic-iterates a structured design plan, generates layered 2.5D scene assets and sprites, uses real Seedance dynamic backgrounds when authorized, runs progressive full-scale layer benchmarks before runtime integration, performs local OpenGame-style BH/VU/IA playability checks, records public benchmark adapters as official/faithful/strict/SKIPPED_NO_SCORE, and iteratively modifies only failed game nodes from benchmark feedback until a high-quality playable Web game is verified.
+description: Use when the user wants a Chinese AI-Scientist-style end-to-end pipeline for Phaser/Vite Web 2D game generation from a game idea, character/environment description, or one/more reference images. The skill creates and critic-iterates a structured design plan, requires real high-quality generated or approved existing image assets through generate2dmap/generate2dsprite or equivalent image-generation workflows, rejects procedural/code-drawn placeholder art as a final product, uses real Seedance dynamic backgrounds only when authorized, runs progressive full-scale layer benchmarks before runtime integration, performs local OpenGame-style BH/VU/IA playability checks, records public benchmark adapters as official/faithful/strict/SKIPPED_NO_SCORE, and iteratively modifies only failed game nodes from benchmark feedback until a high-quality playable Web game is verified.
 ---
 
 # 2DWebGame AutoResearch v2
@@ -24,6 +24,7 @@ v2 在 v1 基础上新增或强化：
 - 增加 strict/advisory policy，区分正式选择和本地预览。
 - 要求公共 benchmark 记录 `official_score`、`implementation_mode`、`leaderboard_comparable`、`SKIPPED_NO_SCORE` 和 skip reason。
 - 明确公共 runner 缺失是 benchmark infrastructure failure，不是内容失败。
+- 把 public benchmark 拆成三步：`bootstrap -> input_pack -> execution`。Runner READY 只说明环境可用，不等于已经评估游戏。
 - 把 failure signatures 映射成具体修改节点，形成 `run benchmark -> read failures -> patch node -> rerun -> accept/rollback` 的闭环。
 
 ## 内置规则
@@ -34,6 +35,9 @@ v2 在 v1 基础上新增或强化：
 - `references/game-design-template.md`
 - `references/iteration-search-strategy.md`
 - `references/pipeline-cn-v1-base.md`
+- `references/successful-game-lessons.md`
+- `references/public-benchmark-bootstrap.md`
+- `references/embedded-asset-generation.md`
 
 执行完整任务时优先读本 `SKILL.md`。需要更细的模板或流程时，再读取上述 v2 本地参考文件，不要读取 v1 路径。
 
@@ -48,6 +52,15 @@ v2 在 v1 基础上新增或强化：
 - 每个节点必须记录 parent、改动原因、prompt/patch、benchmark、截图/视频、用户反馈、回归项、pass/fail 和下一步。
 - 只从当前最佳通过节点继续；如果新节点修复一个指标但破坏 hard gate 或用户意图，必须回滚。
 - v2 额外加入 progressive full-scale layer benchmarking、strict/advisory policy、public benchmark `SKIPPED_NO_SCORE` 规则和 benchmark-feedback iteration 控制器。
+- v2 必须先配置 public benchmark runner，再进入正式自动迭代。每个项目必须生成 `.game_scientist/benchmarks.json` 和 `.game_scientist/benchmark_bootstrap_report.json`；如果所有 public runners 都是 `SKIPPED_NO_SCORE`，这是 `benchmark_infrastructure_missing`，不能当作最终成功。
+- public benchmark runner READY 后，必须为真实游戏截图/视频/遮罩准备输入包并实际执行 READY runner。仅写 `PENDING_NOT_EXECUTED`、`READY` 或“已配置”不能进入 final high-quality handoff。
+- 官方/远程 runner 与 leaderboard 可比分数必须分开：自定义游戏截图、运行时视频、局部 layer preview 即使跑了官方代码，通常也只能写 `leaderboard_comparable: false`；只有官方数据集、官方协议、官方 prompt suite 和官方评测入口全部一致时才可写 `leaderboard_comparable: true`。
+- 设计 critic、视觉审核、benchmark 审核或用户审核给出行动建议后，不能只写报告结束；必须把每条可执行建议转成 SABG 候选节点，运行 targeted benchmark，接受/回滚后再交付。
+- 替换过的 prototype/SVG/contact sheet/旧 manifest 不能留在 selected asset 目录里误导后续评审；必须删除、迁移到 `discarded/`，或在 manifest 中明确 `selected: false`。
+- v2 必须自带地图和角色生成核心流程。外部 `generate2dmap` / `generate2dsprite` 可用时优先调用；不可用时必须使用本 skill 内置的 `references/embedded/` 契约和 `scripts/embedded_*` 脚本继续执行，不能降级成程序化最终美术。
+- 高质量游戏不能使用程序化占位图形作为最终美术。Canvas/SVG/HTML/CSS/几何图形/脚本绘制只允许做 debug、layout guide、碰撞可视化或临时 playable baseline；最终背景、平台、中景、角色、敌人、Boss、FX 必须来自 `generate2dmap`、`generate2dsprite`、内置 `image_gen`、用户提供的高精度资产或明确批准的现有生产资产。
+- 如果本轮没有真实图像生成能力或没有可用高精度资产，可以交付 prototype，但不得宣称“高精度”“一线效果”“制作成功”。benchmark 必须 hard-fail `visual_asset_source_gate`。
+- 如果 benchmark 让程序化占位资产、黑图、噪声墙、纯色块、SVG 几何图、debug rectangle 或 runtime shape-drawn 角色通过，先修 benchmark，再继续做游戏。
 
 ## 输入契约
 
@@ -65,8 +78,11 @@ v2 在 v1 基础上新增或强化：
 
 优先使用：
 
-- `generate2dmap`：side-scroll 地图、runtime objects、分层契约。
-- `generate2dsprite`：角色动作、透明帧、动作一致性 QC。
+- 外部 `generate2dmap` 或内置 `references/embedded/generate2dmap-SKILL.md`：side-scroll 地图、runtime objects、分层契约。高质量背景、场景层、平台/门/机关/拾取物视觉资产默认必须走它或等价图像生成流程，不要用脚本画最终地图。
+- 外部 `generate2dsprite` 或内置 `references/embedded/generate2dsprite-SKILL.md`：角色动作、透明帧、动作一致性 QC。高质量主角、敌人、Boss、FX 默认必须走它或等价图像生成流程，不要用代码绘制最终角色。
+- `scripts/bootstrap_public_benchmarks.py`：为每个项目自动发现并写入 public benchmark runner 配置。
+- `scripts/prepare_public_benchmark_inputs.py`：把运行时截图、全尺寸 layer preview、视频、mask、prompt 打包成 VBench/T2I/DoveNet 标准输入；自动生成短 prompt slug，避免长 prompt 被 runner 当作文件名导致失败。
+- `scripts/embedded_compose_layered_preview.py`、`scripts/embedded_extract_prop_pack.py`、`scripts/embedded_generate2dsprite.py`、`scripts/embedded_make_sprite_layout_guide.py`：外部生成 skill 缺失时的内置后处理与 QC 工具。
 - `game-studio:phaser-2d-game`：Phaser/Vite 场景、输入、HUD、相机。
 - `game-studio:game-playtest`：可玩性与通关测试。
 - `volcengine:volcengine` / `chrome:control-chrome`：用户授权后调用火山引擎 Seedance。
@@ -74,21 +90,136 @@ v2 在 v1 基础上新增或强化：
 - `ffmpeg` / `ffprobe`：视频尺寸、时长、首尾帧、GIF/WebM/MP4 转换。
 - 可选公共 benchmark：VBench、GenEval、T2I-CompBench、DoveNet/iHarmony、GameCraft、VideoGameQA。
 
-公共 benchmark 不可用时必须写 `SKIPPED_NO_SCORE`，不能用弱代理分数冒充官方或 leaderboard 可比结果。
+公共 benchmark 不可用时必须写 `SKIPPED_NO_SCORE`，不能用弱代理分数冒充官方或 leaderboard 可比结果。但 pipeline 不能默认停在 all-skipped 状态：必须先运行 benchmark bootstrap 自动发现/配置 runner；若全部 skipped，记录为 `benchmark_infrastructure_missing`，修配置或保持 prototype/advisory，不能 final handoff 为高质量自动迭代成果。
+
+## Public Benchmark Bootstrap
+
+每个新项目在 `repo_preflight` 后必须运行：
+
+```bash
+python <skill_dir>/scripts/bootstrap_public_benchmarks.py \
+  --project <project_root> \
+  --workspace-root <workspace_root>
+```
+
+正式 final selection 前必须运行 strict 复查：
+
+```bash
+python <skill_dir>/scripts/bootstrap_public_benchmarks.py \
+  --project <project_root> \
+  --workspace-root <workspace_root> \
+  --strict
+```
+
+必须生成：
+
+```text
+<project_root>/.game_scientist/benchmarks.json
+<project_root>/.game_scientist/benchmark_bootstrap_report.json
+```
+
+bootstrap 自动发现：
+
+- `GameScientistBenchmarks/VBench`
+- `GameScientistBenchmarks/T2I-CompBench`
+- `GameScientistBenchmarks/Image-Harmonization-Dataset-iHarmony4/DoveNet`
+- `GameScientistBenchmarks/checkpoints/dovenet/latest_net_G.pth`
+- `scripts/run_remote_vbench.py`
+- `scripts/run_remote_t2i_clipscore.py`
+- `scripts/run_remote_dovenet.py`
+
+也接受环境变量：`GAMESCIENTIST_BENCHMARK_ROOT`、`VBENCH_REPO`、`VBENCH_COMMAND`、`T2I_COMPBENCH_REPO`、`T2I_COMPBENCH_COMMAND`、`DOVENET_REPO`、`DOVENET_CHECKPOINT`、`DOVENET_COMMAND`。
+
+输入协议必须在项目 benchmark 脚本中准备：
+
+- VBench：Seedance 背景视频、runtime camera sweep、角色动作预览短视频。
+- T2I-CompBench：runtime screenshot、full-scale layer preview、设计 prompt/reference contract。
+- DoveNet/iHarmony：composite runtime image、playfield/midground/foreground mask、可选 same-camera target。
+
+若 `benchmark_bootstrap_report.json.ready_public_runner_count == 0`，这是 `benchmark_infrastructure_missing`，不能进入 final high-quality selection。可以继续设计、生成资产或 prototype，但交付必须标为 advisory/prototype，并把配置 public runners 作为下一步阻断项。
+
+## Public Benchmark Input And Execution
+
+`bootstrap` 之后必须进入 `public_benchmark_input_pack`。输入包默认写入：
+
+```text
+<project_root>/benchmark/results/public_benchmarks/inputs/
+  t2i/input_manifest.json
+  vbench/video_manifest.json
+  dovenet/input_manifest.json
+  public_benchmark_input_pack_report.json
+```
+
+推荐命令：
+
+```bash
+python <skill_dir>/scripts/prepare_public_benchmark_inputs.py \
+  --project <project_root> \
+  --prompt "<short scene prompt>" \
+  --runtime-screenshot <runtime_start.png> \
+  --layer-preview <full_scene.png> \
+  --runtime-video <camera_sweep.mp4> \
+  --dovenet-composite <runtime_full.png> \
+  --dovenet-mask <playfield_or_midground_mask.png>
+```
+
+输入要求：
+
+- T2I-CompBench 必须有真实 runtime screenshot 或 full-scale preview，以及完整 prompt/reference contract。完整 prompt 保存在 JSON 字段中，文件名只使用短 slug，最长 64 个 ASCII 字符。
+- VBench 必须有真实 MP4/WebM 输入。没有 Seedance 视频时，必须录制 runtime camera sweep 或动作预览视频；没有视频就写 `benchmark_input_protocol_missing`，不能假装 VBench 已评估。
+- DoveNet/iHarmony 必须有 composite image 和有效 mask。没有 same-camera target 时只能做 diagnostic/advisory，不得写严格官方分数。
+
+随后执行所有 READY runner 或 wrapper，并把结果写入：
+
+```text
+<project_root>/benchmark/results/public_benchmarks/<runner_name>/result.json
+<project_root>/benchmark/results/public_benchmarks/public_benchmark_execution_report.json
+```
+
+执行规则：
+
+- READY runner + 输入存在时，最终交付前必须实际执行；不能停在 `PENDING_NOT_EXECUTED`。
+- Runner 执行失败时，记录命令、stdout/stderr tail、退出码和失败分类，创建 `public_benchmark_execution` 或 `benchmark_input_protocol` 修复节点。
+- 自定义游戏素材跑 public runner，默认 `leaderboard_comparable: false`。不要把远程执行或官方代码执行误写成官方 leaderboard 可比分数。
+- 如果 runner READY 但输入缺失，先补输入包；如果输入包已补但 runner 因 wrapper/环境失败，先修 benchmark 基础设施；不要因此盲目修改游戏画面。
+
+## Embedded Map And Sprite Subfunctions
+
+本 skill 不能依赖其他机器安装了外部 `generate2dmap` / `generate2dsprite`。因此 v2 已内化这两个 skill 的完整副本：
+
+```text
+references/embedded/generate2dmap-SKILL.md
+references/embedded/generate2dsprite-SKILL.md
+references/embedded/generate2dmap-*.md
+references/embedded/generate2dsprite-*.md
+scripts/embedded_*.py
+```
+
+执行规则：
+
+- 外部 peer skill 可用时优先调用。
+- 外部 peer skill 不可用时，必须读取内置 `generate2dmap-SKILL.md` / `generate2dsprite-SKILL.md` 全文，并按其 references/scripts 的内置映射执行。
+- 这些内置文件是权威子功能，不是缩水版摘要。
+- 缺少外部 skill 不是使用程序化最终美术的理由。
 
 ## 总流程
 
 每次 run 按节点执行：
 
 1. `repo_preflight`：检查项目、脚本、服务、已有 manifest 和 benchmark。
-2. `reference_analysis`：复制参考图，分析风格、色彩、空间、动态线索、禁止项。
-3. `idea_design_search`：生成或补全设计方案，critic 最多 3 轮。
-4. `asset_generation`：背景、中景、平台、角色、FX、Seedance 动态背景。
-5. `progressive_layer_composition_benchmark`：资产进入 Phaser 前，做全尺寸逐层合成与评测。
-6. `phaser_runtime_integration`：manifest 驱动加载、输入、碰撞、相机、HUD、debug API。
-7. `runtime_benchmark`：构建、服务、截图、视频、通关、动作、相机、层级、用户反馈。
-8. `benchmark_feedback_iteration`：按失败项只修改对应节点，复测，接受或回滚。
-9. `handoff`：交付 URL、图片/视频/JSON 证据、得分、剩余风险。
+2. `public_benchmark_bootstrap`：运行 `scripts/bootstrap_public_benchmarks.py`，生成项目级 `.game_scientist/benchmarks.json` 和 doctor 报告；all-skipped 必须阻断 final selection。
+3. `reference_analysis`：复制参考图，分析风格、色彩、空间、动态线索、禁止项。
+4. `idea_design_search`：生成或补全设计方案，critic 最多 3 轮。
+5. `asset_generation`：优先用外部 `generate2dmap` / `generate2dsprite`；外部缺失时用内置 embedded 地图/角色流程；通过 image generation 生成背景、中景、平台、角色、FX、Seedance 动态背景。
+6. `visual_asset_source_gate`：检查每个可见最终资产的来源、prompt、原图、QC、非占位证据；程序化占位美术必须阻断。
+7. `progressive_layer_composition_benchmark`：资产进入 Phaser 前，做全尺寸逐层合成与评测。
+8. `phaser_runtime_integration`：manifest 驱动加载、输入、碰撞、相机、HUD、debug API。
+9. `runtime_benchmark`：构建、服务、截图、视频、通关、动作、相机、层级、用户反馈。
+10. `public_benchmark_input_pack`：把最终候选的截图、layer preview、视频、mask、prompt 打包给 READY public runner。
+11. `public_benchmark_execution`：运行 READY runner 或 wrapper，记录真实结果、失败、skip reason 和 leaderboard_comparable。
+12. `benchmark_feedback_iteration`：按失败项和审核建议只修改对应节点，复测，接受或回滚。
+13. `stale_asset_cleanup`：清理或隔离旧 SVG、旧 manifest、旧 contact sheet、debug/prototype 资产，避免被误选。
+14. `handoff`：交付 URL、图片/视频/JSON 证据、得分、剩余风险。
 
 ## 设计 Gate
 
@@ -107,6 +238,7 @@ v2 在 v1 基础上新增或强化：
 - 背景、中景、gameplay 层级契约。
 - Seedance 动态背景 prompt 和 provenance。
 - 角色动作、脚底基准、动作连续性、独立 FX。
+- 资产来源计划：哪些用 `generate2dmap`，哪些用 `generate2dsprite`，哪些用 Seedance，哪些复用用户高精度资产；禁止把程序化图形当最终美术。
 - 相机横向端点、纵向跳跃视差、攻击推近镜头。
 - benchmark 清单和截图验收点。
 
@@ -119,6 +251,32 @@ critic hard-fail：
 - 角色动作、碰撞、相机规则不可测试。
 - Seedance provenance 不可追溯。
 - 用户反馈无法转成 benchmark 或截图检查。
+- 背景、平台、中景、角色、敌人、Boss 或 FX 计划使用 Canvas/SVG/HTML/CSS/几何图形/脚本绘制作为最终高精度资产。
+- 没有 `generate2dmap` / `generate2dsprite` / image generation / approved existing asset 的产物路径和 provenance，却宣称高质量资产完成。
+
+## 真实图像资产 Gate
+
+这是 v2 的硬门槛，优先级高于普通 VU 分数。
+
+每个最终可见资产必须在 manifest 中声明：
+
+- `asset_id`
+- `asset_role`: `background | midground | platform | gate | pickup | hazard | hero | enemy | boss | fx`
+- `asset_source`: `generate2dmap | generate2dsprite | image_gen | user_highres_asset | approved_existing_asset | seedance_video | procedural_debug`
+- `source_prompt_or_reference`
+- `raw_asset_path`
+- `processed_asset_path`
+- `qc_report_path`
+- `used_in_runtime_screenshot: true|false`
+
+接受规则：
+
+- `background`、`midground`、`platform`、`gate`、`pickup`、`hazard` 默认来自 `generate2dmap` 或等价图像生成流程。
+- `hero`、`enemy`、`boss`、`fx` 默认来自 `generate2dsprite` 或等价图像生成流程。
+- 用户给的低精度参考图只能作为风格参考，不能直接放大当最终高精度资产。
+- `procedural_debug` 可以存在于 prototype、debug overlay、collision preview、layout guide，但不能进入 final selected visual stack。
+- 如果为了快速 playable baseline 使用程序化方块/几何角色，必须在报告中标注 `prototype_only`，并继续回到资产节点生成真实图像资产；不能 handoff 为最终成功。
+- Benchmark 不能只看非空、熵或文件大小；必须检查资产来源、实际截图中是否可见、是否为真实图像/视频生成结果、是否有 prompt/provenance/QC。
 
 ## 层级与资产规则
 
@@ -216,7 +374,9 @@ far_background -> midground_objects -> near/atmospheric overlays -> gameplay run
 
 - 文件存在、尺寸符合 contract。
 - provenance/source-set 存在。
+- `asset_source` 不是 `procedural_debug`，除非本轮明确只交付 prototype。
 - 非空、非 placeholder、非模糊色块。
+- 非 Canvas/SVG 几何占位、非纯色矩形、非程序化噪声墙、非 debug shape。
 - 中景 alpha coverage 合理，不是满屏背景。
 - 中景左右/底部接地，不漂浮。
 - 无 key color / 紫边 / 白边 / 黑边泄漏。
@@ -285,6 +445,8 @@ Phaser runtime 必须证明选中的全尺寸 layer stack 确实被导入并可�
 - 初始截图非空。
 - 动态背景启用状态诚实。
 - 实际截图使用选中的背景、中景、角色、平台、门。
+- 实际截图使用真实图像资产，不是程序化占位图形。
+- 角色、敌人、Boss 和 FX 的 runtime 渲染来自生成图像/sprite sheet/approved asset，而不是 Graphics API 画圆、矩形、线段或简化 SVG。
 - 相机横向移动时远景慢、中景中等、gameplay 快。
 - 角色跳跃时远景下移最多，中景下移更少，gameplay 稳定。
 - 攻击技能 camera zoom/easing 自然，回拉不抖。
@@ -329,6 +491,8 @@ npm test
 - 纵向跳跃视差正确：远景位移 > 中景位移 > gameplay 稳定。
 - 中景真 alpha，非灰度通道图，非半透明贴纸。
 - 平台脚底接触面正确，不按草花最高 alpha。
+- 可见资产来源 gate 通过：背景/中景/平台/角色/敌人/Boss/FX 均有真实图像资产 provenance。
+- 程序化占位图、黑图、灰噪声图、纯色形状、debug rectangle 不能通过 VU。
 - 角色颜色在背景中突出，动作可读。
 - 攻击/技能推近镜头自然，回拉不抖。
 - 终点门与视觉最右端对齐。
@@ -351,6 +515,20 @@ Playwright 自动验证：
 ## Benchmark Feedback Iteration
 
 v2 必须把 benchmark 结果转成修改策略。不要只生成报告后停止。
+
+审核建议也是输入信号。任何 design critic、visual critic、runtime report、public benchmark report、人工用户反馈中的可执行建议，都必须进入 `review_action_queue`：
+
+```text
+recommendation -> failure_signature -> candidate_node -> targeted_patch -> targeted_benchmark -> accept_or_rollback
+```
+
+只有以下情况可以不继续迭代：
+
+- 建议不可执行或超出本轮用户目标，并在 report 中明确 deferred reason。
+- 建议需要外部付费/登录/额度，用户未授权。
+- 同一建议已被候选节点测试且 benchmark/截图证明会破坏更高优先级 hard gate。
+
+不能把“已写审核报告”当作完成；报告必须说明每条建议被实施、回滚或延期。
 
 推荐命令：
 
@@ -391,9 +569,19 @@ benchmark/results/iteration/latest_iteration_report.md
 - `jump_y_parallax_fail`：调纵向 parallax 公式，防止方向反或中景位移过大。
 - `foot_contact_fail`：调 collision/contact plane，不重画角色。
 - `hero_action_readability_fail`：调角色颜色、动作帧、脚底基准、FX 分离。
+- `visual_asset_source_missing`：回到资产生成节点，补齐 generate2dmap/generate2dsprite/image_gen/approved asset 产物和 provenance。
+- `procedural_placeholder_art_used`：阻断最终交付；用真实图像资产替换程序化 Canvas/SVG/shape art。
+- `map_not_generate2dmap_pipeline`：背景/平台/中景没有走地图图像生成或等价流程，回到 `generate2dmap side_scroll_mode`。
+- `sprite_not_generate2dsprite_qc`：主角/敌人/Boss/FX 没有真实 sprite 生成和动作 QC，回到 `generate2dsprite hero_action_bundle`。
+- `benchmark_false_positive_placeholder_pass`：benchmark 放过了占位图或黑图，先修 benchmark，再重跑，不要继续调游戏参数。
 - `playthrough_fail`：调关卡路线、跳跃高度、门位置、敌人/拾取物。
 - `restart_fail`：修状态重置。
 - `public_layer_fit_benchmarks_skipped`：这是 benchmark infrastructure failure，不允许因此修改游戏内容；配置公共 runner 或保留 advisory warning。
+- `public_benchmark_ready_not_executed`：runner 已 READY 但没有生成输入包或没有执行；先补输入并运行，不允许 final。
+- `public_benchmark_prompt_filename_fail`：长 prompt 被当成文件名导致失败；用短 slug 文件名，完整 prompt 存 JSON。
+- `public_benchmark_input_protocol_missing`：缺截图、视频、mask、prompt、route trace；回到输入包节点。
+- `review_recommendations_not_iterated`：审核建议没有变成候选节点；回到 SABG review action queue。
+- `stale_prototype_artifacts_selected`：旧 SVG/contact sheet/manifest/debug 资产残留并被误选；清理或隔离后重跑 asset source gate。
 
 ### 接受/回滚规则
 
@@ -415,6 +603,7 @@ benchmark/results/iteration/latest_iteration_report.md
 - 相机、视差、碰撞、速度、跳跃、播放速率：局部贪心/坐标搜索。
 - 公开 benchmark 配置缺失：基础设施节点，不修改游戏内容。
 - 用户反馈：先转成 benchmark，再修对应节点。
+- 审核建议：先转成 search node，再用 targeted benchmark 验证；不要只写报告。
 
 默认预算：
 
@@ -432,6 +621,7 @@ benchmark/results/iteration/latest_iteration_report.md
 - 资产目录。
 - manifest 路径。
 - Seedance 是否真实调用、task id、输出路径。
+- 每个最终可见资产的来源：`generate2dmap` / `generate2dsprite` / `image_gen` / user high-res / existing approved / Seedance / skipped。
 - progressive layer previews 路径。
 - strict/advisory benchmark 报告路径。
 - BH/VU/IA 分数。
@@ -439,6 +629,9 @@ benchmark/results/iteration/latest_iteration_report.md
 - 迭代报告路径。
 - 哪些失败项触发了哪些修改。
 - 哪些公共 benchmark 是 `SKIPPED_NO_SCORE`，原因是什么。
+- 哪些 public runners READY、哪些实际执行、哪些只是配置未跑；未跑必须有阻断或延期原因。
+- 每条审核/用户建议对应的候选节点、测试结果、接受/回滚/延期原因。
+- 已清理或隔离的旧 prototype/debug/占位资产清单。
 - 剩余风险和下一阶段建议。
 
 ## 常见错误
@@ -456,3 +649,9 @@ benchmark/results/iteration/latest_iteration_report.md
 - 不要按草花最高 alpha 设置站立线。
 - 不要在未真实调用 Seedance 时伪造动态视频。
 - 不要为了过 benchmark 放宽真实失败；应该改 benchmark 让它捕捉真实问题。
+- 不要用程序化 SVG、Canvas、Phaser Graphics、HTML/CSS 形状或脚本绘图冒充高精度最终美术。
+- 不要让“能玩”“能 build”“截图非空”掩盖美术资产失败；这只能说明 prototype 可运行，不能说明高质量游戏完成。
+- 不要把 `ready_public_runner_count > 0` 当作 public benchmark 已执行。
+- 不要让 long prompt 直接进入文件名；runner 文件名使用短 slug，完整 prompt 写 manifest。
+- 不要收到审核建议后停在报告；必须进入搜索/迭代，直到建议被实施、回滚或明确延期。
+- 不要把旧 SVG、旧 contact sheet、旧 manifest 留在 selected 目录里给下次运行造成假证据。
